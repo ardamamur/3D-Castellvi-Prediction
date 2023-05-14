@@ -12,6 +12,7 @@ class DataHandler:
         """
         self.bids = BIDS_Global_info(dataset, data_types, additional_key = image_types, verbose=True)
         self.master_df = pd.read_excel(master_list)
+        self.subject_list = self.master_df['Full_Id'].values.tolist()
     
     def _get_len(self):
         """
@@ -60,7 +61,7 @@ class DataHandler:
         print("Total families in the dataset:", len(bids_families))
         return fam_count
     
-    def _get_subjects_with_multiple_families(families:dict):
+    def _get_subjects_with_multiple_families(self,families):
         """
         Args:
             Dict : subjects as keys and related family numbers as values
@@ -72,7 +73,7 @@ class DataHandler:
             if value > 1:
                 keys_with_value_greater_than_1.append(key)
 
-        print("SUbjects with multiple families:", keys_with_value_greater_than_1)
+        print("Subjects with multiple families:", keys_with_value_greater_than_1)
         return keys_with_value_greater_than_1
      
     def _get_subject_family(self, subject:str):
@@ -97,7 +98,7 @@ class DataHandler:
 
     def _get_missing_sacrum(self):
         print("Number of missing sacrum_seg: {}".format(self.master_df["Sacrum Seg"].isnull().sum()))
-        null_indexes = self.master_df.index[self.master_df["Sacrum_Seg"].isnull()].tolist()
+        null_indexes = self.master_df.index[self.master_df["Sacrum Seg"].isnull()].tolist()
         return null_indexes
 
     def _drop_missing_entries(self)->None:
@@ -111,8 +112,8 @@ class DataHandler:
             # Cause there is clearly a castellvi anomaly there, 
             # but the S1 is not fully visible in the scan 
             print("All missing subjects has no information about sacrum segmentation")
-            missing_subjects = self._get_missing_subjects()
-            self.master_df = self.master_df.drop(missing_subjects, inplace=True)
+            self.master_df = self.master_df.dropna(subset=['Full_Id'])
+            self.subject_list = self.master_df['Full_Id'].values.tolist()
         else:
             print('missing subjects: ' , self._get_missing_subjects())
             raise Exception('There are some mising subjects that has sacrum segmentation. Check them again')
@@ -132,11 +133,8 @@ class DataHandler:
             26: "S1",    29: "S2",    30: "S3",    31: "S4",    32: "S5",    33: "S6",
             27: "Cocc"
         }
-        idx = []
-        for i in v_idx2name:
-            if i in roi_parts:
-                idx.append(v_idx2name[i])
-        return idx.sort()
+        idx = [key for key, value in v_idx2name.items() if value in roi_parts]
+        return sorted(idx)
     
 
     def _get_cutout(self, family:BIDS_Family, roi_object_idx: list[int], return_seg=False):
@@ -148,7 +146,6 @@ class DataHandler:
             Cutouts generally contains the following parts of last lumbar vertebra and sacrum:
                 L4, L5, L6 (last lumbar vertebra) and S1 
         """
-
         ct_nii = family["ct"][0].open_nii()
         seg_nii = family["msk_seg-vertsac"][0].open_nii()
 
@@ -167,10 +164,75 @@ class DataHandler:
         if return_seg:
             seg_nii.set_array_(vert_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
             seg_nii.rescale_and_reorient_(axcodes_to=('P', 'I', 'R'), voxel_spacing = (1,1,1))
+            return seg_nii
 
-
-        return ct_nii, seg_nii
+        else:
+            return ct_nii
+    
+    def _get_subject_name(self, subject:str):
         
+        subject_name = None
+        for sub in self.subject_list:
+            if subject in sub:
+                subject_name = sub
+                return subject_name, True
+        if subject_name == None :
+            return subject_name, False
+    
+    def _is_multi_family(self, subject, families):
+        if subject in families:
+            return True
+        else:
+            return False
+
+    def _get_max_shape(self, multi_family_subjects):
+        """
+        Args:
+            subject name
+        Return:
+            the maximum shape within the subjects
+
+        Be sure to drop missing subjects before running this function
+        """
+
+        max_shape_ct = (0,0,0)
+        max_shape_seg = (0,0,0)
+        for subject in self.bids.subjects:
+            if not self._is_multi_family(subject, families=multi_family_subjects):
+                sub_name, exists = self._get_subject_name(subject=subject)
+                if exists:
+                    print(sub_name)
+                    last_l = self.master_df.loc[self.master_df['Full_Id'] == sub_name, 'Last_L'].values
+                    #print(last_l)
+                    roi_object_idx = self._get_roi_object_idx(roi_parts=[last_l, 'S1'])
+                    family = self._get_subject_family(subject=subject)
+                    seg_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True)
+                    ct_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=False)
+                    if ct_nii.get_array().shape > max_shape_ct:
+                        max_shape_ct = ct_nii.get_array().shape
+                    if seg_nii.get_array().shape > max_shape_seg:
+                        max_shape_seg = seg_nii.get_array().shape
+
+        return max_shape_ct, max_shape_seg
+
+    def _get_subject_samples(self):
+        '''
+        This function extract subject names for training dataset creation
+        '''
+        bids_subjects = []
+        master_subjects = []
+        self._drop_missing_entries()
+        families = self._get_families()
+        multi_family_subjects = self._get_subjects_with_multiple_families(families)
+        for subject in self.bids.subjects:
+            if not self._is_multi_family(subject, families=multi_family_subjects):
+                sub_name, exists = self._get_subject_name(subject=subject)
+                if exists:
+                    bids_subjects.append(subject)
+                    master_subjects.append(sub_name)
+        return bids_subjects, master_subjects
+    
+
 
 def main():
     dataset = ['/data1/practical-sose23/dataset-verse19',  '/data1/practical-sose23/dataset-verse20']
@@ -178,8 +240,14 @@ def main():
     image_types = ["ct", "subreg", "cortex"]
     master_list = '../../dataset/VerSe_masterlist.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    
-    print(processor._get_len())
+    processor._drop_missing_entries()
+    families = processor._get_families()
+    #print(families)
+    multi_family_subjects = processor._get_subjects_with_multiple_families(families)
+    max_ct, max_seg = processor._get_max_shape(multi_family_subjects)
+    print('max_ct_shape:', max_ct)
+    print('max_seg_shape:', max_seg)
+
 
 if __name__ == "__main__":
     main()
