@@ -337,7 +337,7 @@ def main():
     dataset = ['/data1/practical-sose23/dataset-verse19',  '/data1/practical-sose23/dataset-verse20']
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg", "cortex"]
-    master_list = '../../dataset/VerSe_masterlist.xlsx'
+    master_list = '../dataset/VerSe_masterlist.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
     processor._drop_missing_entries()
     families = processor._get_families()
