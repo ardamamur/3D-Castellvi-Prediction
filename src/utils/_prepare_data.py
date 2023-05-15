@@ -136,39 +136,9 @@ class DataHandler:
         idx = [key for key, value in v_idx2name.items() if value in roi_parts]
         return sorted(idx)
     
-    def pad_with_borders(self, img, pad_size):
-        padding = [(s - i)//2 for s, i in zip(pad_size, img.shape)]
-        return np.pad(img, [(p, p) for p in padding], mode='edge')
-
-    def pad_3d_image(self, img, target_shape):
-
-        print(img.shape)
-        # Calculate padding sizes only if original dimension is less than target
-        pad_x = max(0, target_shape[0] - img.shape[0]) if img.shape[0] < target_shape[0] else 0
-        pad_y = max(0, target_shape[1] - img.shape[1]) if img.shape[1] < target_shape[1] else 0
-        pad_z = max(0, target_shape[2] - img.shape[2]) if img.shape[2] < target_shape[2] else 0
-
-        # Divide the padding evenly to both ends of the dimensions
-        pad_x_before, pad_x_after = pad_x // 2, pad_x - pad_x // 2
-        pad_y_before, pad_y_after = pad_y // 2, pad_y - pad_y // 2
-        pad_z_before, pad_z_after = pad_z // 2, pad_z - pad_z // 2
-
-        # Create padding specification
-        padding = ((pad_x_before, pad_x_after), (pad_y_before, pad_y_after), (pad_z_before, pad_z_after))
-
-        # Pad using np.pad
-        img_padded = np.pad(img, padding, mode='constant', constant_values=0)
-
-        return img_padded
 
 
-    def resize_image(self, img, target_shape):
-        # TODO Implement this function
-        pass
-
-
-
-    def _get_cutout(self, family:BIDS_Family, roi_object_idx: list[int], return_seg=False, pad=False, pad_size=(135, 181, 126), crop=False, crop_size=((135, 181, 126))):
+    def _get_cutout(self, family:BIDS_Family, roi_object_idx: list[int], return_seg=False, pad=True, max_shape=(135, 181, 126)):
         """
         Args:
             BIDS Family, roi_object_idx (id of the desired vertebras)
@@ -198,10 +168,10 @@ class DataHandler:
 
         # Calculate the min and max indices for each dimension
         # TODO : Ask this approach to Hendrick
-        min_idx = np.maximum(np.array([idx.min() for idx in roi_vox_idx]) - np.array([50, 50, 50]), 0)  # Ensure indices are not negative
-        max_idx = np.array([idx.max() for idx in roi_vox_idx]) + np.array([50, 50, 50])
+        # min_idx = np.maximum(np.array([idx.min() for idx in roi_vox_idx]) - np.array([50, 50, 50]), 0)  # Ensure indices are not negative
+        # max_idx = np.array([idx.max() for idx in roi_vox_idx]) + np.array([50, 50, 50])
 
-
+        #max_shape = (135, 204, 139)
 
         ct_nii.set_array_(ct_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
 
@@ -215,7 +185,6 @@ class DataHandler:
             return seg_nii
         else:
             return ct_nii
-
 
     
     def _get_subject_name(self, subject:str):
@@ -263,49 +232,6 @@ class DataHandler:
 
         return tuple(max_shape_ct), tuple(max_shape_seg)
     
-
-    def _get_resize_shape_V2(self, multi_family_subjects, is_max=True):
-        """
-        Args:
-            subject name
-        Return:
-            the maximum shape within the subjects
-
-        Be sure to drop missing subjects before running this function
-        """
-
-        resize_shape_ct = np.array((0,0,0))
-        resize_shape_seg = np.array((0,0,0))
-        for subject in self.bids.subjects:
-            if not self._is_multi_family(subject, families=multi_family_subjects):
-                sub_name, exists = self._get_subject_name(subject=subject)
-                if exists:
-                    print(sub_name)
-                    last_l = self.master_df.loc[self.master_df['Full_Id'] == sub_name, 'Last_L'].values
-                    roi_object_idx = self._get_roi_object_idx(roi_parts=[last_l, 'S1'])
-                    family = self._get_subject_family(subject=subject)
-                    seg_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True)
-                    ct_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=False)
-
-                    ct_shape = np.array(ct_nii.get_array().shape)
-                    seg_shape = np.array(seg_nii.get_array().shape)
-
-                    # Update maximum shape if current image shape in each dimension is larger
-                    for dim in range(3):
-                        if is_max:
-                            resize_shape_ct[dim] = max(resize_shape_ct[dim], ct_shape[dim])
-                            resize_shape_seg[dim] = max(resize_shape_seg[dim], seg_shape[dim])
-                        else:
-                            resize_shape_ct[dim] = min(resize_shape_ct[dim], ct_shape[dim])
-                            resize_shape_seg[dim] = min(resize_shape_seg[dim], seg_shape[dim])                           
-
-                    print(resize_shape_ct)
-                    print(resize_shape_seg)
-
-        return tuple(resize_shape_ct), tuple(resize_shape_seg)
-
-
-
 
     def _get_subject_samples(self):
         '''
