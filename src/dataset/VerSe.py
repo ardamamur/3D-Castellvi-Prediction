@@ -9,7 +9,7 @@ import torchio as tio
 from monai import transforms as montransforms
 from torch.utils.data import Dataset
 from typing import Tuple, Union
-from _get_data import DataHandler
+from utils._prepare_data import DataHandler
 
 
 class VerSe(Dataset):
