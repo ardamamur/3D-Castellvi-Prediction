@@ -185,9 +185,12 @@ class DataHandler:
         ct_nii = family["ct"][0].open_nii()
         seg_nii = family["msk_seg-vertsac"][0].open_nii()
 
+       
+
         #separate arrays to manipulate the ct_nii_array 
         vert_arr = seg_nii.get_array()
         ct_arr = ct_nii.get_array()
+        print('full ct shape:', ct_arr.shape)
 
         #get all indices of voxels classified as belonging to the relevant object(s)
         roi_vox_idx = np.where((vert_arr[:,:,:,None] == roi_object_idx).any(axis = 3))
@@ -199,27 +202,17 @@ class DataHandler:
         max_idx = np.array([idx.max() for idx in roi_vox_idx]) + np.array([50, 50, 50])
 
 
-        if pad:
-            ct_nii.set_array_(self.pad_3d_image(ct_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()], pad_size))
-            #ct_nii.set_array_(self.resize_image(ct_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()], pad_size))
-            #ct_nii.set_array_(self.resize_image(ct_arr[min_idx[0]:max_idx[0], min_idx[1]:max_idx[1], min_idx[2]:max_idx[2]], pad_size))
-    
-        else:
-            ct_nii.set_array_(ct_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
+
+        ct_nii.set_array_(ct_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
 
         #let's not forget to return a properly oriented and scaled version of the nii
         ct_nii.rescale_and_reorient_(axcodes_to=('P', 'I', 'R'), voxel_spacing = (1,1,1))
 
-        if return_seg:
-            if pad:
-                #seg_nii.set_array_(self.resize_image(vert_arr[min_idx[0]:max_idx[0], min_idx[1]:max_idx[1], min_idx[2]:max_idx[2]], pad_size))
-                seg_nii.set_array_(self.pad_3d_image(vert_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()], pad_size))
-                #seg_nii.set_array_(self.pad_with_borders(vert_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()], pad_size))
-            else:
-                seg_nii.set_array_(vert_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
-            seg_nii.rescale_and_reorient_(axcodes_to=('P', 'I', 'R'), voxel_spacing = (1,1,1))
-            return seg_nii
+        seg_nii.set_array_(vert_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
+        seg_nii.rescale_and_reorient_(axcodes_to=('P', 'I', 'R'), voxel_spacing = (1,1,1))
 
+        if return_seg:
+            return seg_nii
         else:
             return ct_nii
 
@@ -357,9 +350,9 @@ def main():
     last_l =processor.master_df.loc[processor.master_df['Full_Id'] == master_subjects[0], 'Last_L'].values
     roi_object_idx = processor._get_roi_object_idx(roi_parts=[last_l, 'S1'])
     img = processor._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True, pad=False, pad_size=(135, 204, 139))
-    img2 = processor._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True, pad=True, pad_size=(135, 204, 139))
-    print('original:', img.shape)
-    print('pad:', img2.shape)
-    print('expected:',(135, 204, 139))
+    #img2 = processor._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True, pad=True, pad_size=(135, 204, 139))
+    print('cutout shape:', img.shape)
+    #print('pad:', img2.shape)
+    #print('expected:',(135, 204, 139))
 if __name__ == "__main__":
     main()
