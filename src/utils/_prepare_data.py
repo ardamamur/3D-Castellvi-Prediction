@@ -6,6 +6,7 @@ from BIDS import BIDS_Global_info, BIDS_Family, NII
 from BIDS.snapshot2D import create_snapshot,Snapshot_Frame,Visualization_Type,Image_Modes
 from pathlib import Path
 from tqdm import tqdm
+from pqdm.threads import pqdm
 
 class DataHandler:
     def __init__(self, master_list: str, dataset:list, data_types:list, image_types:list) -> None:
@@ -256,8 +257,44 @@ class DataHandler:
             return True
         else:
             return False
+        
+    def _max_shape_job(self, family):
+        """
+        Args:
+            list of families to handle.
+        Returns:
+            The maximum shape of the cutouts over the list
+        """
 
-    def _get_max_shape(self, multi_family_subjects):
+        max_shape = [0,0,0]
+
+        seg_nii = family["msk_seg-vertsac"][0].open_nii()
+        ctd = family["ctd_seg-vertsac"][0].open_cdt()
+        ctd.zoom = seg_nii.zoom
+
+        seg_arr = seg_nii.reorient(axcodes_to=('P', 'I', 'R'), verbose = False).get_array()
+        ctd = ctd.reorient(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
+
+        seg_arr = seg_nii.get_array()
+            
+        lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
+        assert(lowest_L_idx != None)
+
+        lowest_L_mask = np.where(seg_arr == lowest_L_idx)
+
+        ap_size = (lowest_L_mask[0].max() - lowest_L_mask[0].min()) * seg_nii.zoom[0]
+        lr_size = (lowest_L_mask[2].max() - lowest_L_mask[2].min()) * seg_nii.zoom[2]
+
+        prev_L_idx = lowest_L_idx - 1
+        sac_idx = 26
+
+        is_size = 0 if not (prev_L_idx in ctd.centroids.keys() and sac_idx in ctd.centroids.keys()) else (ctd.centroids[sac_idx][1] - ctd.centroids[prev_L_idx][1]) * seg_nii.zoom[1]
+
+        return max(max_shape, [ap_size, is_size, lr_size])
+
+        
+
+    def _get_max_shape(self, multi_family_subjects, n_jobs = 8):
         """
         Args:
             subject name
@@ -267,39 +304,20 @@ class DataHandler:
         Be sure to drop missing subjects before running this function
         """
 
-        max_shape = [0,0,0]
+        families = []
+
         for subject in tqdm(self.bids.subjects):
             if not self._is_multi_family(subject, families=multi_family_subjects):
                 sub_name, exists = self._get_subject_name(subject=subject)
                 if exists:
                     family = self._get_subject_family(subject=subject)
+                    families.append(family)
                     
-                    
-                    seg_nii = family["msk_seg-vertsac"][0].open_nii()
-                    ctd = family["ctd_seg-vertsac"][0].open_cdt()
-                    ctd.zoom = seg_nii.zoom
+        max_shapes = pqdm(families, self._max_shape_job, n_jobs = n_jobs)
+        max_shapes = [[0,0,0] if type(shape) != list else shape for shape in max_shapes]
+        max_shapes = np.array(max_shapes)
 
-                    seg_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
-                    ctd.reorient_(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
-
-                    seg_arr = seg_nii.get_array()
-                    
-                    lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
-                    assert(lowest_L_idx != None)
-
-                    lowest_L_mask = np.where(seg_arr == lowest_L_idx)
-
-                    ap_size = (lowest_L_mask[0].max() - lowest_L_mask[0].min()) * seg_nii.zoom[0]
-                    lr_size = (lowest_L_mask[2].max() - lowest_L_mask[2].min()) * seg_nii.zoom[2]
-
-                    prev_L_idx = lowest_L_idx - 1
-                    sac_idx = 26
-
-                    is_size = 0 if not (prev_L_idx in ctd.centroids.keys() and sac_idx in ctd.centroids.keys()) else (ctd.centroids[sac_idx][1] - ctd.centroids[prev_L_idx][1]) * seg_nii.zoom[1]
-
-                    max_shape = max(max_shape, [ap_size, is_size, lr_size])
-
-        return max_shape
+        return max_shapes.max(axis = 0)
     
 
     def _get_subject_samples(self):
@@ -322,10 +340,11 @@ class DataHandler:
 
 
 def main():
-    dataset = ['/data1/practical-sose23/dataset-verse19',  '/data1/practical-sose23/dataset-verse20']
+    WORKING_DIR = "/home/daniel/Documents/Uni/practical-sose23/"
+    dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg", "cortex"]
-    master_list = '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
+    master_list = WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
     processor._drop_missing_entries()
     families = processor._get_families()
@@ -342,7 +361,7 @@ def main():
     bids_subjects, master_subjects = processor._get_subject_samples()
     bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
     for family in tqdm(bids_families):
-        processor._get_cutout(family = family, return_seg = False, max_shape = (128,128,128))
+        processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136))
     
 
     
