@@ -1,9 +1,11 @@
 import logging
 import numpy as np
 import pandas as pd
-from BIDS import BIDS_Global_info, BIDS_Family
+import BIDS
+from BIDS import BIDS_Global_info, BIDS_Family, NII
 from BIDS.snapshot2D import create_snapshot,Snapshot_Frame,Visualization_Type,Image_Modes
 from pathlib import Path
+from tqdm import tqdm
 
 class DataHandler:
     def __init__(self, master_list: str, dataset:list, data_types:list, image_types:list) -> None:
@@ -136,86 +138,107 @@ class DataHandler:
         idx = [key for key, value in v_idx2name.items() if value in roi_parts]
         return sorted(idx)
     
-    def pad_with_borders(self, img, pad_size):
-        padding = [(s - i)//2 for s, i in zip(pad_size, img.shape)]
-        return np.pad(img, [(p, p) for p in padding], mode='edge')
+    def _compute_slice(self, seg_arr:np.ndarray, ctd:BIDS.Centroids, max_shape:tuple | None):
+        """
+        Args: 
+            Segmentation Array, Max Shape, BIDS Centroids file
+        Returns:
+            Cutout slices that can be applied to the segmentation file itself or the original CT of the same family to contain at least 
+            the lowest L vertebra and the image part up to the centroid of the superior vertebra and down to the S1 centroid.
+            Slices are increased to max_shape dimension-wise to include as much real image data as possible.
+        """
 
-    def pad_3d_image(self, img, target_shape):
+        lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
+        assert(lowest_L_idx != None)
 
-        print(img.shape)
-        # Calculate padding sizes only if original dimension is less than target
-        pad_x = max(0, target_shape[0] - img.shape[0]) if img.shape[0] < target_shape[0] else 0
-        pad_y = max(0, target_shape[1] - img.shape[1]) if img.shape[1] < target_shape[1] else 0
-        pad_z = max(0, target_shape[2] - img.shape[2]) if img.shape[2] < target_shape[2] else 0
+        lowest_L_mask = np.where(seg_arr == lowest_L_idx)
 
-        # Divide the padding evenly to both ends of the dimensions
-        pad_x_before, pad_x_after = pad_x // 2, pad_x - pad_x // 2
-        pad_y_before, pad_y_after = pad_y // 2, pad_y - pad_y // 2
-        pad_z_before, pad_z_after = pad_z // 2, pad_z - pad_z // 2
+        #for the anterior and posterior bounds as well as the left and right bounds we just use the indices of the lowest L which we get from the mask
+        ap_slice = slice(lowest_L_mask[0].min(), lowest_L_mask[0].max())
+        lr_slice = slice(lowest_L_mask[2].min(), lowest_L_mask[2].max())
 
-        # Create padding specification
-        padding = ((pad_x_before, pad_x_after), (pad_y_before, pad_y_after), (pad_z_before, pad_z_after))
+        #for the superior and inferior bound we use the centroids of the previous L vertebra and the S1 vertebra if available 
+        prev_L_idx = lowest_L_idx - 1
+        sac_idx = 26
 
-        # Pad using np.pad
-        img_padded = np.pad(img, padding, mode='constant', constant_values=0)
+        is_slice = slice(lowest_L_mask[1].min() if not prev_L_idx in ctd.centroids.keys() else int(ctd.centroids[prev_L_idx][1]),
+                        lowest_L_mask[1].max() if not sac_idx in ctd.centroids.keys() else int(ctd.centroids[sac_idx][1]))
 
-        return img_padded
+        #Now we adapt the slices to achieve the target_shape
+        if max_shape:
+            ap_increase = max(max_shape[0] - (ap_slice.stop - ap_slice.start), 0)
+            lr_increase = max(max_shape[2] - (lr_slice.stop - lr_slice.start), 0)
+            is_increase = max(max_shape[1] - (is_slice.stop - is_slice.start), 0)
+
+            ap_slice = slice(ap_slice.start - int(ap_increase / 2), ap_slice.stop + (ap_increase - int(ap_increase / 2)))
+            lr_slice = slice(lr_slice.start - int(lr_increase / 2), lr_slice.stop + (lr_increase - int(lr_increase / 2)))
+            is_slice = slice(is_slice.start - int(is_increase / 2), is_slice.stop + (is_increase - int(is_increase / 2)))
+
+        if max_shape:
+            assert(ap_slice.stop-ap_slice.start == max_shape[0])
+            assert(lr_slice.stop-lr_slice.start == max_shape[2])
+            assert(is_slice.stop-is_slice.start == max_shape[1])
+
+        return ap_slice, lr_slice, is_slice
 
 
-    def resize_image(self, img, target_shape):
-        # TODO Implement this function
-        pass
-
-
-
-    def _get_cutout(self, family:BIDS_Family, roi_object_idx: list[int], return_seg=False, pad=False, pad_size=(135, 181, 126), crop=False, crop_size=((135, 181, 126))):
+    def _get_cutout(self, family:BIDS_Family, return_seg=False, max_shape=(135, 181, 126)) -> NII:
         """
         Args:
-            BIDS Family, roi_object_idx (id of the desired vertebras)
+            BIDS Family, return_seg (instead of ct), max_shape
         Returns:
             Cutout for the given subject.
-            Cutouts generally contains the following parts of last lumbar vertebra and sacrum:
-                L4, L5, L6 (last lumbar vertebra) and S1 
-
-            
-            This version of the function first calculates the indices of the ROI, then extends them by 10 in each direction to get a slightly larger cutout. 
-            It then applies the resize_image function to ensure that the cutout is not larger than the target size.
-            The value 10 is arbitrary and you might need to adjust it to ensure that you're getting a large enough region around your ROI.
+            Cutouts generally contains the full lowest vertebra and are always padded to max_shape
+    
         """
-        ct_nii = family["ct"][0].open_nii()
         seg_nii = family["msk_seg-vertsac"][0].open_nii()
+        ctd = family["ctd_seg-vertsac"][0].open_cdt()
+        ctd.zoom = seg_nii.zoom
 
-       
+        if not return_seg:
+            ct_nii = family["ct"][0].open_nii()
 
-        #separate arrays to manipulate the ct_nii_array 
-        vert_arr = seg_nii.get_array()
-        ct_arr = ct_nii.get_array()
-        print('full ct shape:', ct_arr.shape)
+        seg_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
+        ctd.reorient_(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
 
-        #get all indices of voxels classified as belonging to the relevant object(s)
-        roi_vox_idx = np.where((vert_arr[:,:,:,None] == roi_object_idx).any(axis = 3))
+        if not return_seg:
+            ct_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
+
+        
+        #naive pre-cropping around centroid to decrease size that needs to be resampled
+        # lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
+        # assert(lowest_L_idx != None)
+        # lowest_L_ctd = ctd[lowest_L_idx]
+        
+        # #save 10 cm in each direction from centroid, accounting for zoom
+        # slices = [slice(int((lowest_L_ctd[i] - 100)/seg_nii.zoom[i]) , int((lowest_L_ctd[i] + 100)/seg_nii.zoom[i])) for i in range(3)]
+        # seg_nii.set_array_(seg_nii.get_array()[slices[0], slices[1], slices[2]])
+
+        # if not return_seg:
+        #     ct_nii.set_array(ct_nii.get_array()[slices[0], slices[1], slices[2]])
+
+        seg_nii.rescale_(voxel_spacing = (1,1,1))
+        ctd.rescale_(voxel_spacing = (1,1,1))
+
+        if not return_seg:
+            ct_nii.rescale_(voxel_spacing = (1,1,1))
 
 
-        # Calculate the min and max indices for each dimension
-        # TODO : Ask this approach to Hendrick
-        min_idx = np.maximum(np.array([idx.min() for idx in roi_vox_idx]) - np.array([50, 50, 50]), 0)  # Ensure indices are not negative
-        max_idx = np.array([idx.max() for idx in roi_vox_idx]) + np.array([50, 50, 50])
+        seg_arr = seg_nii.get_array()
 
-
-
-        ct_nii.set_array_(ct_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
-
-        #let's not forget to return a properly oriented and scaled version of the nii
-        ct_nii.rescale_and_reorient_(axcodes_to=('P', 'I', 'R'), voxel_spacing = (1,1,1))
-
-        seg_nii.set_array_(vert_arr[roi_vox_idx[0].min():roi_vox_idx[0].max(), roi_vox_idx[1].min():roi_vox_idx[1].max(), roi_vox_idx[2].min():roi_vox_idx[2].max()])
-        seg_nii.rescale_and_reorient_(axcodes_to=('P', 'I', 'R'), voxel_spacing = (1,1,1))
+        ap_slice, lr_slice, is_slice = self._compute_slice(seg_arr = seg_arr, ctd = ctd, max_shape = max_shape)
 
         if return_seg:
-            return seg_nii
+            seg_cutout = seg_arr[ap_slice, is_slice, lr_slice]
+            #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
+            seg_cutout = np.pad(seg_cutout, [(0, max_shape[i] - seg_cutout.shape[i]) for i in range(len(seg_cutout.shape))],"constant")
+            return seg_nii.set_array(seg_cutout)
         else:
-            return ct_nii
-
+            ct_arr = ct_nii.get_array()
+            ct_cutout = ct_arr[ap_slice, is_slice, lr_slice]
+            #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
+            ct_cutout = np.pad(ct_cutout, [(0, max_shape[i] - ct_cutout.shape[i]) for i in range(len(ct_cutout.shape))],"constant")
+            return ct_nii.set_array(ct_cutout)
 
     
     def _get_subject_name(self, subject:str):
@@ -244,68 +267,40 @@ class DataHandler:
         Be sure to drop missing subjects before running this function
         """
 
-        max_shape_ct = np.array((0,0,0))
-        max_shape_seg = np.array((0,0,0))
-        for subject in self.bids.subjects:
+        max_shape = [0,0,0]
+        for subject in tqdm(self.bids.subjects):
             if not self._is_multi_family(subject, families=multi_family_subjects):
                 sub_name, exists = self._get_subject_name(subject=subject)
                 if exists:
-                    print(sub_name)
-                    last_l = self.master_df.loc[self.master_df['Full_Id'] == sub_name, 'Last_L'].values
-                    roi_object_idx = self._get_roi_object_idx(roi_parts=[last_l, 'S1'])
                     family = self._get_subject_family(subject=subject)
-                    seg_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True)
-                    ct_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=False)
-                    max_shape_ct = np.maximum(max_shape_ct, ct_nii.get_array().shape)
-                    print(max_shape_ct)
-                    max_shape_seg = np.maximum(max_shape_seg, seg_nii.get_array().shape)
-                    print(max_shape_seg)
+                    
+                    
+                    seg_nii = family["msk_seg-vertsac"][0].open_nii()
+                    ctd = family["ctd_seg-vertsac"][0].open_cdt()
+                    ctd.zoom = seg_nii.zoom
 
-        return tuple(max_shape_ct), tuple(max_shape_seg)
+                    seg_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
+                    ctd.reorient_(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
+
+                    seg_arr = seg_nii.get_array()
+                    
+                    lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
+                    assert(lowest_L_idx != None)
+
+                    lowest_L_mask = np.where(seg_arr == lowest_L_idx)
+
+                    ap_size = (lowest_L_mask[0].max() - lowest_L_mask[0].min()) * seg_nii.zoom[0]
+                    lr_size = (lowest_L_mask[2].max() - lowest_L_mask[2].min()) * seg_nii.zoom[2]
+
+                    prev_L_idx = lowest_L_idx - 1
+                    sac_idx = 26
+
+                    is_size = 0 if not (prev_L_idx in ctd.centroids.keys() and sac_idx in ctd.centroids.keys()) else (ctd.centroids[sac_idx][1] - ctd.centroids[prev_L_idx][1]) * seg_nii.zoom[1]
+
+                    max_shape = max(max_shape, [ap_size, is_size, lr_size])
+
+        return max_shape
     
-
-    def _get_resize_shape_V2(self, multi_family_subjects, is_max=True):
-        """
-        Args:
-            subject name
-        Return:
-            the maximum shape within the subjects
-
-        Be sure to drop missing subjects before running this function
-        """
-
-        resize_shape_ct = np.array((0,0,0))
-        resize_shape_seg = np.array((0,0,0))
-        for subject in self.bids.subjects:
-            if not self._is_multi_family(subject, families=multi_family_subjects):
-                sub_name, exists = self._get_subject_name(subject=subject)
-                if exists:
-                    print(sub_name)
-                    last_l = self.master_df.loc[self.master_df['Full_Id'] == sub_name, 'Last_L'].values
-                    roi_object_idx = self._get_roi_object_idx(roi_parts=[last_l, 'S1'])
-                    family = self._get_subject_family(subject=subject)
-                    seg_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True)
-                    ct_nii = self._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=False)
-
-                    ct_shape = np.array(ct_nii.get_array().shape)
-                    seg_shape = np.array(seg_nii.get_array().shape)
-
-                    # Update maximum shape if current image shape in each dimension is larger
-                    for dim in range(3):
-                        if is_max:
-                            resize_shape_ct[dim] = max(resize_shape_ct[dim], ct_shape[dim])
-                            resize_shape_seg[dim] = max(resize_shape_seg[dim], seg_shape[dim])
-                        else:
-                            resize_shape_ct[dim] = min(resize_shape_ct[dim], ct_shape[dim])
-                            resize_shape_seg[dim] = min(resize_shape_seg[dim], seg_shape[dim])                           
-
-                    print(resize_shape_ct)
-                    print(resize_shape_seg)
-
-        return tuple(resize_shape_ct), tuple(resize_shape_seg)
-
-
-
 
     def _get_subject_samples(self):
         '''
@@ -330,12 +325,14 @@ def main():
     dataset = ['/data1/practical-sose23/dataset-verse19',  '/data1/practical-sose23/dataset-verse20']
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg", "cortex"]
-    master_list = '../dataset/VerSe_masterlist.xlsx'
+    master_list = '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
     processor._drop_missing_entries()
     families = processor._get_families()
-    #print(families)
-    # multi_family_subjects = processor._get_subjects_with_multiple_families(families)
+    print(families)
+    multi_family_subjects = processor._get_subjects_with_multiple_families(families)
+    max_shape = processor._get_max_shape(multi_family_subjects)
+    print(max_shape)
     # max_ct, max_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=True)
     # min_ct, min_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=False)
     # print('max_ct_shape:', max_ct)
@@ -343,16 +340,12 @@ def main():
     # print('min_ct_shape:', min_ct)
     # print('min_seg_shape:', min_seg)
     bids_subjects, master_subjects = processor._get_subject_samples()
-    #print(len(bids_subjects))
-    #print(len(master_subjects))
+    bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
+    for family in tqdm(bids_families):
+        processor._get_cutout(family = family, return_seg = False, max_shape = (128,128,128))
     
-    family =processor._get_subject_family(subject=bids_subjects[0])
-    last_l =processor.master_df.loc[processor.master_df['Full_Id'] == master_subjects[0], 'Last_L'].values
-    roi_object_idx = processor._get_roi_object_idx(roi_parts=[last_l, 'S1'])
-    img = processor._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True, pad=False, pad_size=(135, 204, 139))
-    #img2 = processor._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=True, pad=True, pad_size=(135, 204, 139))
-    print('cutout shape:', img.shape)
-    #print('pad:', img2.shape)
-    #print('expected:',(135, 204, 139))
+
+    
+    
 if __name__ == "__main__":
     main()

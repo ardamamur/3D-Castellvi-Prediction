@@ -13,10 +13,11 @@ from utils._prepare_data import DataHandler
 
 
 class VerSe(Dataset):
-    def __init__(self, processor:DataHandler, subjects, crop_size=(135, 181, 126), use_seg=True, use_binary_classes=True, training=True) -> None:
+    def __init__(self, processor:DataHandler, subjects, castellvi_classes:list, crop_size=(135, 181, 126), use_seg=True, use_binary_classes=True, training=True) -> None:
         """
         Initialize an object of 
         """
+        # TODO : add new argument for training and testing subject names
         self.processor = processor
         self.crop_size = crop_size
         self.use_seg = use_seg
@@ -24,7 +25,7 @@ class VerSe(Dataset):
         self.binary = use_binary_classes
         self.bids_subjects = subjects[0]
         self.master_subjects = subjects[1]
-        self.categories = ['1a', '1b', '2a', '2b', '3a', '3b', '4', '0']
+        self.categories = castellvi_classes
         self.castellvi_dict = {category: i for i, category in enumerate(self.categories)}
         self.transform = self.get_transformations()
         self.test_transform = self.get_test_transformations()
@@ -58,7 +59,7 @@ class VerSe(Dataset):
             binary_classes.append(1)
         else:
             binary_classes.append(0)
-        return np.array(binary_classes)
+        return np.array(binary_classes) 
     
     def _get_castellvi_label(self, subject):
 
