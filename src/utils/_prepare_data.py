@@ -267,7 +267,7 @@ class DataHandler:
         Be sure to drop missing subjects before running this function
         """
 
-        max_shape = (0,0,0)
+        max_shape = [0,0,0]
         for subject in tqdm(self.bids.subjects):
             if not self._is_multi_family(subject, families=multi_family_subjects):
                 sub_name, exists = self._get_subject_name(subject=subject)
@@ -281,21 +281,23 @@ class DataHandler:
 
                     seg_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
                     ctd.reorient_(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
+
+                    seg_arr = seg_nii.get_array()
                     
-                    #naive pre-cropping around centroid to decrease size that needs to be resampled
                     lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
                     assert(lowest_L_idx != None)
-                    lowest_L_ctd = ctd[lowest_L_idx]
-                    
-                    #save 10 cm in each direction from centroid, accounting for zoom
-                    slices = [slice(int((lowest_L_ctd[i] - 100)/seg_nii.zoom[i]) , int((lowest_L_ctd[i] + 100)/seg_nii.zoom[i])) for i in range(3)]
-                    seg_nii.set_array_= seg_nii.get_array()[slices[0], slices[1], slices[2]]
 
-                    seg_nii.rescale_(voxel_spacing = (1,1,1))
-                    ctd.rescale_(voxel_spacing = (1,1,1))
+                    lowest_L_mask = np.where(seg_arr == lowest_L_idx)
 
-                    ap_slice, lr_slice, is_slice = self._compute_slice(seg_arr = seg_nii.get_array(), ctd = ctd, max_shape = None)
-                    max_shape = (max(max_shape[0], (ap_slice.stop - ap_slice.start)), max(max_shape[1], (lr_slice.stop - lr_slice.start)), max(max_shape[1], (is_slice.stop - is_slice.start)))
+                    ap_size = (lowest_L_mask[0].max() - lowest_L_mask[0].min()) * seg_nii.zoom[0]
+                    lr_size = (lowest_L_mask[2].max() - lowest_L_mask[2].min()) * seg_nii.zoom[2]
+
+                    prev_L_idx = lowest_L_idx - 1
+                    sac_idx = 26
+
+                    is_size = 0 if not (prev_L_idx in ctd.centroids.keys() and sac_idx in ctd.centroids.keys()) else (ctd.centroids[sac_idx][1] - ctd.centroids[prev_L_idx][1]) * seg_nii.zoom[1]
+
+                    max_shape = max(max_shape, [ap_size, is_size, lr_size])
 
         return max_shape
     
@@ -327,10 +329,10 @@ def main():
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
     processor._drop_missing_entries()
     families = processor._get_families()
-    # print(families)
+    print(families)
     multi_family_subjects = processor._get_subjects_with_multiple_families(families)
-    #max_shape = processor._get_max_shape(multi_family_subjects)
-    #print(max_shape)
+    max_shape = processor._get_max_shape(multi_family_subjects)
+    print(max_shape)
     # max_ct, max_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=True)
     # min_ct, min_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=False)
     # print('max_ct_shape:', max_ct)
