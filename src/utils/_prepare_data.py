@@ -191,30 +191,38 @@ class DataHandler:
             Cutouts generally contains the full lowest vertebra and are always padded to max_shape
     
         """
-        ct_nii = family["ct"][0].open_nii()
         seg_nii = family["msk_seg-vertsac"][0].open_nii()
         ctd = family["ctd_seg-vertsac"][0].open_cdt()
-        ctd.zoom = ct_nii.zoom
+        ctd.zoom = seg_nii.zoom
+
+        if not return_seg:
+            ct_nii = family["ct"][0].open_nii()
+
+        seg_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
+        ctd.reorient_(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
 
         if not return_seg:
             ct_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
 
-        seg_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
-        ctd.reorient_(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
         
         #naive pre-cropping around centroid to decrease size that needs to be resampled
-        lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
-        assert(lowest_L_idx != None)
-        lowest_L_ctd = ctd[lowest_L_idx]
+        # lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
+        # assert(lowest_L_idx != None)
+        # lowest_L_ctd = ctd[lowest_L_idx]
         
-        #save 10 cm in each direction from centroid, accounting for zoom
-        slices = [slice(int((lowest_L_ctd[i] - 100)/seg_nii.zoom[i]) , int((lowest_L_ctd[i] + 100)/seg_nii.zoom[i])) for i in range(3)]
-        seg_nii.set_array_= seg_nii.get_array()[slices[0], slices[1], slices[2]]
+        # #save 10 cm in each direction from centroid, accounting for zoom
+        # slices = [slice(int((lowest_L_ctd[i] - 100)/seg_nii.zoom[i]) , int((lowest_L_ctd[i] + 100)/seg_nii.zoom[i])) for i in range(3)]
+        # seg_nii.set_array_(seg_nii.get_array()[slices[0], slices[1], slices[2]])
+
+        # if not return_seg:
+        #     ct_nii.set_array(ct_nii.get_array()[slices[0], slices[1], slices[2]])
+
+        seg_nii.rescale_(voxel_spacing = (1,1,1))
+        ctd.rescale_(voxel_spacing = (1,1,1))
 
         if not return_seg:
-            ct_nii.set_array_ = ct_nii.get_array()[slices[0], slices[1], slices[2]]
+            ct_nii.rescale_(voxel_spacing = (1,1,1))
 
-        seg_nii.array = seg_nii.get_array()
 
         seg_arr = seg_nii.get_array()
 
@@ -331,8 +339,8 @@ def main():
     # print('min_seg_shape:', min_seg)
     bids_subjects, master_subjects = processor._get_subject_samples()
     bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
-    #for family in tqdm(bids_families):
-    #    processor._get_cutout(family = family, return_seg = False, max_shape = (128,128,128))
+    for family in tqdm(bids_families):
+        processor._get_cutout(family = family, return_seg = False, max_shape = (128,128,128))
     
 
     
