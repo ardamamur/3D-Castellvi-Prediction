@@ -2,78 +2,17 @@ import torch
 from torch import nn
 from models.ResNet3D import *
 
-def generate_model(opt,
-                   input_shape:tuple,  # (W, H, D)
-                   num_classes:int
-                ):
-    
-    if opt.binary_classification:
+def _get_num_classes(binary_classification, castellvi_classes):
+    if binary_classification:
         num_classes = 1
     else:
-        num_classes = len(opt.castellvi_classes) 
+        num_classes = len(castellvi_classes)
+    return num_classes
 
-    if 'resnet' in opt.model:
-        if '10' in opt.model:
-            model = resnet10(
-                sample_input_W=input_shape[0],
-                sample_input_H=input_shape[1],
-                sample_input_D=input_shape[2],
-                shortcut_type=opt.resnet_shortcut,
-                no_cuda=opt.no_cuda,
-                num_classes=num_classes)
-        elif '18' in opt.model:
-            model = resnet18(
-                sample_input_W=input_shape[0],
-                sample_input_H=input_shape[1],
-                sample_input_D=input_shape[2],
-                shortcut_type=opt.resnet_shortcut,
-                no_cuda=opt.no_cuda,
-                num_classes=num_classes)
-        elif '34' in opt.model:
-            model = resnet34(
-                sample_input_W=input_shape[0],
-                sample_input_H=input_shape[1],
-                sample_input_D=input_shape[2],
-                shortcut_type=opt.resnet_shortcut,
-                no_cuda=opt.no_cuda,
-                num_classes=num_classes)
-        elif '50' in opt.model:
-            model = resnet50(
-                sample_input_W=input_shape[0],
-                sample_input_H=input_shape[1],
-                sample_input_D=input_shape[2],
-                shortcut_type=opt.resnet_shortcut,
-                no_cuda=opt.no_cuda,
-                num_classes=num_classes)
-        elif '101' in opt.model:
-            model = resnet101(
-                sample_input_W=input_shape[0],
-                sample_input_H=input_shape[1],
-                sample_input_D=input_shape[2],
-                shortcut_type=opt.resnet_shortcut,
-                no_cuda=opt.no_cuda,
-                num_classes=num_classes)
-        elif '152' in opt.model:
-            model = resnet152(
-                sample_input_W=input_shape[0],
-                sample_input_H=input_shape[1],
-                sample_input_D=input_shape[2],
-                shortcut_type=opt.resnet_shortcut,
-                no_cuda=opt.no_cuda,
-                num_classes=num_classes)
-        elif '200' in opt.model:
-            model = resnet200(
-                sample_input_W=input_shape[0],
-                sample_input_H=input_shape[1],
-                sample_input_D=input_shape[2],
-                shortcut_type=opt.resnet_shortcut,
-                no_cuda=opt.no_cuda,
-                num_classes=num_classes)
-        else:
-            raise Exception('Not Implemented')
-        
-        return model
+def _generate_model(model:str, num_classes:int, no_cuda:bool=False):
+    if model == 'resnet':
+        model = get_resnet_model(num_classes=num_classes, no_cuda=no_cuda)
     else:
-        pass
-
+        raise Exception('Not Implemented')
     
+    return model

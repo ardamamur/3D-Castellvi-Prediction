@@ -43,6 +43,13 @@ def parse_opts():
     )
 
     parser.add_argument(
+        '--use_seg',
+        default=False,
+        type=bool,
+        help="Use segmentation images for training"
+    )
+
+    parser.add_argument(
         '--phase', 
         default='train', 
         type=str, 
@@ -50,11 +57,26 @@ def parse_opts():
     
     parser.add_argument(
         '--learning_rate',  # set to 0.001 when finetune
-        default=0.001,
+        default=1e-3,
         type=float,
         help=
         'Initial learning rate (divided by 10 while training by lr scheduler)')
     
+    parser.add_argument(
+        '--weight_decay',  # set to 0.001 when finetune
+        default=1e-4,
+        type=float,
+        help=
+        'Initial weight decay')
+    
+    parser.add_argument(
+        '--total_iterations', 
+        default=100,
+        type=int,
+        help=
+        'max epoch number')
+    
+
     parser.add_argument(
         '--batch_size',
         default=1,
@@ -88,13 +110,6 @@ def parse_opts():
         help=
         'Path for pretrained model.'
     )
-    parser.add_argument(
-        '--new_layer_names',
-        #default=['upsample1', 'cmp_layer3', 'upsample2', 'cmp_layer2', 'upsample3', 'cmp_layer1', 'upsample4', 'cmp_conv1', 'conv_seg'],
-        default=['conv_seg'],
-        type=list,
-        help='New layer except for backbone')
-
 
     parser.add_argument(
         '--no_cuda',
@@ -103,23 +118,23 @@ def parse_opts():
     
     parser.add_argument(
         '--gpu_id',
-        type=int,
-        default=1             
+        type=str,
+        default='3',            
         help='Gpu id')
+    
+    parser.add_argument(
+        '--n_devices',
+        type=int,
+        default=1,            
+        help='Gpu numbers')
 
 
     parser.add_argument(
         '--model',
-        default='resnet10',
+        default='resnet',
         type=str,
-        help='(resnet | preresnet | wideresnet | resnext | densenet | ')
+        help='model name')
     
-
-    parser.add_argument(
-        '--resnet_shortcut',
-        default='B',
-        type=str,
-        help='Shortcut type of resnet (A | B)')
     
     parser.add_argument(
         '--manual_seed',

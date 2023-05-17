@@ -6,10 +6,8 @@ import math
 from functools import partial
 
 __all__ = [
-    'ResNet', 'resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
-    'resnet152', 'resnet200'
+    'ResNet', 'get_resnet_model'
 ]
-
 
 def conv3x3x3(in_planes, out_planes, stride=1, dilation=1):
     # 3x3x3 convolution with padding
@@ -21,7 +19,6 @@ def conv3x3x3(in_planes, out_planes, stride=1, dilation=1):
         stride=stride,
         padding=dilation,
         bias=False)
-
 
 def downsample_basic_block(x, planes, stride, no_cuda=False):
     out = F.avg_pool3d(x, kernel_size=1, stride=stride)
@@ -36,17 +33,19 @@ def downsample_basic_block(x, planes, stride, no_cuda=False):
 
     return out
 
-
-class BasicBlock(nn.Module):
-    expansion = 1
+class Bottleneck(nn.Module):
+    expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
-        super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3x3(inplanes, planes, stride=stride, dilation=dilation)
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(planes)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3x3(planes, planes, dilation=dilation)
+        self.conv2 = nn.Conv3d(
+            planes, planes, kernel_size=3, stride=stride, dilation=dilation, padding=dilation, bias=False)
         self.bn2 = nn.BatchNorm3d(planes)
+        self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm3d(planes * 4)
+        self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
         self.dilation = dilation
@@ -114,10 +113,7 @@ class ResNet(nn.Module):
     def __init__(self,
                  block,
                  layers,
-                 sample_input_D,
-                 sample_input_H,
-                 sample_input_W,
-                 num_seg_classes,
+                 num_classes,
                  shortcut_type='B',
                  no_cuda = False):
         self.inplanes = 64
@@ -141,32 +137,8 @@ class ResNet(nn.Module):
             block, 256, layers[2], shortcut_type, stride=1, dilation=2)
         self.layer4 = self._make_layer(
             block, 512, layers[3], shortcut_type, stride=1, dilation=4)
-
-        self.conv_seg = nn.Sequential(
-                                        nn.ConvTranspose3d(
-                                        512 * block.expansion,
-                                        32,
-                                        2,
-                                        stride=2
-                                        ),
-                                        nn.BatchNorm3d(32),
-                                        nn.ReLU(inplace=True),
-                                        nn.Conv3d(
-                                        32,
-                                        32,
-                                        kernel_size=3,
-                                        stride=(1, 1, 1),
-                                        padding=(1, 1, 1),
-                                        bias=False), 
-                                        nn.BatchNorm3d(32),
-                                        nn.ReLU(inplace=True),
-                                        nn.Conv3d(
-                                        32,
-                                        num_seg_classes,
-                                        kernel_size=1,
-                                        stride=(1, 1, 1),
-                                        bias=False) 
-                                        )
+        self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
@@ -206,58 +178,21 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
+
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        x = self.conv_seg(x)
+
+        x = self.avgpool(x)
+
+        x = x.view(x.size(0), -1)  # Flatten the tensor
+        x = self.fc(x)
 
         return x
 
-def resnet10(**kwargs):
-    """Constructs a ResNet-18 model.
-    """
-    model = ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
-    return model
 
-
-def resnet18(**kwargs):
-    """Constructs a ResNet-18 model.
-    """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
-    return model
-
-
-def resnet34(**kwargs):
-    """Constructs a ResNet-34 model.
-    """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
-    return model
-
-
-def resnet50(**kwargs):
-    """Constructs a ResNet-50 model.
-    """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
-    return model
-
-
-def resnet101(**kwargs):
-    """Constructs a ResNet-101 model.
-    """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
-    return model
-
-
-def resnet152(**kwargs):
-    """Constructs a ResNet-101 model.
-    """
-    model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
-    return model
-
-
-def resnet200(**kwargs):
-    """Constructs a ResNet-101 model.
-    """
-    model = ResNet(Bottleneck, [3, 24, 36, 3], **kwargs)
+def get_resnet_model(num_classes, shortcut_type='B', no_cuda=False):
+    # ResNet 101 
+    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes, shortcut_type, no_cuda)
     return model
