@@ -19,24 +19,20 @@ def main(params):
                             data_types=params.data_types,
                             image_types=params.img_types
                         )
-    
+
     processor._drop_missing_entries()
     bids_subjects, master_subjects = processor._get_subject_samples()
+    bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
+    subjects = (bids_families, master_subjects)
 
     verse_data_module = VerSeDataModule(processor,
-                                        subjects=(bids_subjects, master_subjects),
+                                        subjects=subjects,
                                         castellvi_classes=params.castellvi_classes,
                                         pad_size=(128,86,136),
                                         use_seg=params.use_seg,
                                         use_binary_classes=params.binary_classification, 
-                                        batch_size=params.batch_size)
-
-    # Setup the data module
-    verse_data_module.setup(phase='train')
-    # Create the DataLoader instances
-    train_dataloader = verse_data_module.train_dataloader()
-    val_dataloader = verse_data_module.val_dataloader()
-
+                                        batch_size=params.batch_size,
+                                        test_data_path=params.test_data_path)
 
     is_baseline = False
     if params.model == 'resnet':
@@ -68,7 +64,8 @@ def main(params):
 
     # Train the model ⚡
     model = model.cuda()
-    trainer.fit(model, train_dataloader=train_dataloader, val_dataloaders=val_dataloader)
+    # Pass your data module to the trainer
+    trainer.fit(model, verse_data_module)
 
 
 

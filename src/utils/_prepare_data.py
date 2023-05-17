@@ -235,13 +235,13 @@ class DataHandler:
             seg_cutout = seg_arr[ap_slice, is_slice, lr_slice]
             #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
             seg_cutout = np.pad(seg_cutout, [(0, max_shape[i] - seg_cutout.shape[i]) for i in range(len(seg_cutout.shape))],"constant")
-            return seg_nii.set_array(seg_cutout)
+            return self._get_array(seg_nii.set_array(seg_cutout))
         else:
             ct_arr = ct_nii.get_array()
             ct_cutout = ct_arr[ap_slice, is_slice, lr_slice]
             #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
             ct_cutout = np.pad(ct_cutout, [(0, max_shape[i] - ct_cutout.shape[i]) for i in range(len(ct_cutout.shape))],"constant")
-            return ct_nii.set_array(ct_cutout)
+            return self._get_array(ct_nii.set_array(ct_cutout))
 
     
     def _get_subject_name(self, subject:str):
@@ -339,6 +339,16 @@ class DataHandler:
                     master_subjects.append(sub_name)
         return bids_subjects, master_subjects
     
+    def _get_array(self, img):
+        img_arr = img.get_array()
+        return img_arr.astype(np.float32)
+
+def save_list(path, list):
+    # Open the file in write mode ('w')
+    with open(path, 'w') as f:
+        for item in list:
+            # Write each item on a new line
+            f.write("%s\n" % item)
 
 
 def read_config(config_file):
@@ -351,13 +361,13 @@ def read_config(config_file):
 def main():
     params = read_config('/u/home/mamar/3D-Castellvi-Prediction/settings.yaml')
     print(params.n_epochs*2)
-    # WORKING_DIR = "/data1/practical-sose23/"
-    # dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
-    # data_types = ['rawdata',"derivatives"]
-    # image_types = ["ct", "subreg", "cortex"]
-    # master_list = WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
-    # processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    # processor._drop_missing_entries()
+    WORKING_DIR = "/data1/practical-sose23/"
+    dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
+    data_types = ['rawdata',"derivatives"]
+    image_types = ["ct", "subreg", "cortex"]
+    master_list = WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
+    processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
+    processor._drop_missing_entries()
     # families = processor._get_families()
     # print(families)
     #multi_family_subjects = processor._get_subjects_with_multiple_families(families)
@@ -369,13 +379,26 @@ def main():
     # print('max_seg_shape:', max_seg)
     # print('min_ct_shape:', min_ct)
     # print('min_seg_shape:', min_seg)
-    # bids_subjects, master_subjects = processor._get_subject_samples()
-    # bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
-    # for family in tqdm(bids_families):
-    #     processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136))
-    
+    bids_subjects, master_subjects = processor._get_subject_samples()
+    bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
+    subjects = (bids_families, master_subjects)
+    # print(len(subjects[0]))
+    # print(len(subjects[1]))
+    # print(len(subjects))
+    #print(bids_families)
+    # for i,j in zip(bids_subjects, master_subjects):
+    #     print(i, '---', j)
+    family = subjects[0][0]
+    img = processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136))
+    print(type(img))
+    #print(img.get_array())
+    return
+    for family in tqdm(subjects[0]):
+        print(family)
+        
+        break
 
     
     
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

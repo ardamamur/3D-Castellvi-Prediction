@@ -29,6 +29,7 @@ save_intervals: 10
 n_epochs: 200
 resume_path: ''
 experiments: '/u/home/mamar/3D-Castellvi-Prediction/experiments'
+test_data_path : '/u/home/mamar/3D-Castellvi-Prediction/experiments/baseline_models/test_list.txt'
 pretrain_path: 'pretrain/resnet_50.pth'
 no_cuda: False
 gpu_id: '3'

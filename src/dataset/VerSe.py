@@ -28,8 +28,6 @@ class VerSe(Dataset):
         self.categories = castellvi_classes
         self.castellvi_dict = {category: i for i, category in enumerate(self.categories)}
         self.apply_transform = apply_transform
-        self.transform = self.get_transformations
-        self.test_transform = self.get_test_transformations
 
     def __len__(self):
         return len(self.master_subjects)
@@ -37,21 +35,33 @@ class VerSe(Dataset):
     def __getitem__(self, index):
         # TODO : Do not apply cutout extraction for test images
         # TODO : Only use multiple families subjects which included in master list
-        bids_idx = self.bids_subjects[index]
+
+        #family = self.processor._get_subject_family(subject=bids_idx)
+        #last_l = self.processor.master_df.loc[self.processor.master_df['Full_Id'] == master_idx, 'Last_L'].values
+        #roi_object_idx = self.processor._get_roi_object_idx(roi_parts=[last_l, 'S1'])
+        print("Getting item", index)
+
+        bids_family = self.bids_subjects[index]
+        #print(bids_family)
+
         master_idx = self.master_subjects[index]
-        family = self.processor._get_subject_family(subject=bids_idx)
-        last_l = self.processor.master_df.loc[self.processor.master_df['Full_Id'] == master_idx, 'Last_L'].values
-        roi_object_idx = self.processor._get_roi_object_idx(roi_parts=[last_l, 'S1'])
-        img = self.processor._get_cutout(family=family, roi_object_idx=roi_object_idx, return_seg=self.use_seg, pad=True, pad_size=self.crop_size)
+        img = self.processor._get_cutout(family=bids_family, return_seg=self.use_seg, max_shape=self.pad_size)
+        img = torch.from_numpy(img).unsqueeze(0)
+        #print(img.shape)
         if self.binary:
             labels = self._get_binary_label(master_idx)
         else:
             labels = self._get_castellvi_label(master_idx)
-        
-        if self.apply_transform:
-            img = self.transform(img)
-        else:
-            img = self.test_transform(img)
+        labels = np.array(labels)
+        labels = labels.astype(np.float32)
+
+
+        # if self.apply_transform:
+        #     transform = self.get_transformations()
+        #     img = transform(img)
+        # else:
+        #     transform = self.get_test_transformations()
+        #     img = transform(img)
 
         return img, labels
     
@@ -90,8 +100,9 @@ class VerSe(Dataset):
         # TODO : Ask if it makes sense to apply spatialpad to test data
         # center crop 
 
-        return tio.transforms.CropOrPad((128,86,136))  # Adjust the size according to your needs
-
+        transformations = tio.transforms.CropOrPad((128,86,136))  # Adjust the size according to your needs
+        return transformations
+    
 
         
 
