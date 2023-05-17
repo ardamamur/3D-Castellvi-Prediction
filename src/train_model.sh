@@ -3,6 +3,7 @@
 
 # set the environment variable
 export CUDA_VISIBLE_DEVICES=3
+export PYTHONPATH=$PYTHONPATH:/data1/practical-sose23/castellvi/castellvi_prediction/bids
 
 # call your training script with all the parameters
 python3 train.py \

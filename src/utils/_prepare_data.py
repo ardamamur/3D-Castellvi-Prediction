@@ -340,7 +340,7 @@ class DataHandler:
 
 
 def main():
-    WORKING_DIR = "/home/daniel/Documents/Uni/practical-sose23/"
+    WORKING_DIR = "/data1/practical-sose23/"
     dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg", "cortex"]
@@ -349,22 +349,22 @@ def main():
     processor._drop_missing_entries()
     families = processor._get_families()
     print(families)
-    multi_family_subjects = processor._get_subjects_with_multiple_families(families)
-    max_shape = processor._get_max_shape(multi_family_subjects)
-    print(max_shape)
+    #multi_family_subjects = processor._get_subjects_with_multiple_families(families)
+    #max_shape = processor._get_max_shape(multi_family_subjects)
+    #print(max_shape)
     # max_ct, max_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=True)
     # min_ct, min_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=False)
     # print('max_ct_shape:', max_ct)
     # print('max_seg_shape:', max_seg)
     # print('min_ct_shape:', min_ct)
     # print('min_seg_shape:', min_seg)
-    bids_subjects, master_subjects = processor._get_subject_samples()
-    bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
-    for family in tqdm(bids_families):
-        processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136))
+    # bids_subjects, master_subjects = processor._get_subject_samples()
+    # bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
+    # for family in tqdm(bids_families):
+    #     processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136))
     
 
     
     
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()
