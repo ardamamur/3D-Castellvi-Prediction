@@ -8,7 +8,7 @@ img_types:
   - 'ct'
   - 'subreg'
   - 'cortex'
-master_list: '../dataset/VerSe_masterlist.xlsx'
+master_list: '/u/home/mamar/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
 binary_classification: True
 castellvi_classes: 
   - '1a'
