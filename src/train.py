@@ -46,7 +46,7 @@ def main(params):
         raise Exception('Not Implemented')
     
     if is_baseline:
-        experiment = '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models' + params.model
+        experiment = params.experiments + '/baseline_models/' + params.model
     else:
         raise Exception('Not Implemented')
 
