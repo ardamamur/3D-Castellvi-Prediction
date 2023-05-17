@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.ResNet3D import *
-from utils.settings import parse_opts
 from utils._get_model import _generate_model, _get_num_classes
 
 class ResNetLightning(pl.LightningModule):
@@ -14,6 +13,8 @@ class ResNetLightning(pl.LightningModule):
 
         
         # TODO add another loss function for multi class classification
+        # matthew's correlation coefficient as eval metrics
+        # In classification task you can think as regression task. 
         self.criterion = nn.CrossEntropyLoss() # or use another suitable loss function
         self.learning_rate = params.learning_rate
         self.weight_decay = params.weight_decay

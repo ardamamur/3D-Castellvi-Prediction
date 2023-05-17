@@ -5,24 +5,4 @@
 export CUDA_VISIBLE_DEVICES=3
 export PYTHONPATH=$PYTHONPATH:/data1/practical-sose23/castellvi/castellvi_prediction/bids
 
-# call your training script with all the parameters
-# TODO : convert all list types to string
-python3 train.py \
---data_root /data1/practical-sose23/dataset-verse19 /data1/practical-sose23/dataset-verse20 \
---data_types rawdata derivatives \
---img_types ct subreg cortex \
---master_list ../dataset/VerSe_masterlist.xlsx \
---binary_classification True \
---castellvi_classes 1a 1b 2a 2b 3a 3b 4 0 \
---use_seg False \
---phase train \
---learning_rate 0.001 \
---weight_decay 0.0001 \
---total_iterations 100 \
---batch_size 8 \
---n_epochs 200 \
---no_cuda False \
---gpu_id 3 \
---n_devices 1 \
---model resnet \
---manual_seed 1
+python3 train.py --settings /u/home/mamar/3D-Castellvi-Prediction/settings.yaml

@@ -349,15 +349,17 @@ def read_config(config_file):
     return config
 
 def main():
-    WORKING_DIR = "/data1/practical-sose23/"
-    dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
-    data_types = ['rawdata',"derivatives"]
-    image_types = ["ct", "subreg", "cortex"]
-    master_list = WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
-    processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    processor._drop_missing_entries()
-    families = processor._get_families()
-    print(families)
+    params = read_config('/u/home/mamar/3D-Castellvi-Prediction/settings.yaml')
+    print(params.n_epochs*2)
+    # WORKING_DIR = "/data1/practical-sose23/"
+    # dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
+    # data_types = ['rawdata',"derivatives"]
+    # image_types = ["ct", "subreg", "cortex"]
+    # master_list = WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
+    # processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
+    # processor._drop_missing_entries()
+    # families = processor._get_families()
+    # print(families)
     #multi_family_subjects = processor._get_subjects_with_multiple_families(families)
     #max_shape = processor._get_max_shape(multi_family_subjects)
     #print(max_shape)
@@ -375,5 +377,5 @@ def main():
 
     
     
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

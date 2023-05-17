@@ -1,12 +1,13 @@
 import os
 import torch
+import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 from utils._prepare_data import DataHandler
 from utils._get_model import *
-from utils.settings import parse_opts
+from utils._prepare_data import read_config
 from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
 
@@ -73,7 +74,11 @@ def main(params):
 
 if __name__ == '__main__':
     # settings
-    params = parse_opts()
-    os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id # Use specific gpu -> default 3
-    main(params=params)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--settings', type=str, default='/u/home/mamar/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
+    args = parser.parse_args()
+    params = read_config(args.settings)
+    print(params)
+    #os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id # Use specific gpu -> default 3
+    #main(params=params)
     # getting model
