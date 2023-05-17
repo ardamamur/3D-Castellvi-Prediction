@@ -47,8 +47,7 @@ def main(params):
         raise Exception('Not Implemented')
 
     # Initialize Tensorboard
-    logs = experiment + '/logs/'
-    logger = TensorBoardLogger(logs)
+    logger = TensorBoardLogger(experiment)
 
     # Define checkpoint callback
     checkpoint_callback = ModelCheckpoint(

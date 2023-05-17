@@ -38,7 +38,7 @@ class ResNetLightning(pl.LightningModule):
         x, y = batch
         y_hat = torch.sigmoid(self.model(x))
         loss = self.criterion(y_hat, y)
-        self.log('loss', loss, on_step=True, on_epoch=True)
+        self.log('loss', loss.item(), on_step=True, on_epoch=True)
         print(f'Train loss: {loss}')
         return {'loss':loss}
 
@@ -50,7 +50,7 @@ class ResNetLightning(pl.LightningModule):
         x, y = batch
         y_hat = torch.sigmoid(self.model(x))
         val_loss = self.criterion(y_hat, y)
-        self.log('val_loss', val_loss)
+        self.log('val_loss', val_loss.item())
         print(f'Val loss: {val_loss}')
         return {'val_loss':val_loss}
 
@@ -58,7 +58,7 @@ class ResNetLightning(pl.LightningModule):
         x, y = batch
         y_hat = torch.sigmoid(self.model(x))
         test_loss = self.criterion(y_hat, y)
-        self.log('test_loss', test_loss)
+        self.log('test_loss', test_loss.item())
         return {'test_loss':test_loss}
 
     def configure_optimizers(self):
