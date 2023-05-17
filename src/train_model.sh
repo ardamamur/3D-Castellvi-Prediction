@@ -5,7 +5,7 @@
 export CUDA_VISIBLE_DEVICES=3
 
 # call your training script with all the parameters
-python3 train_script.py \
+python3 train.py \
 --data_root /data1/practical-sose23/dataset-verse19 /data1/practical-sose23/dataset-verse20 \
 --data_types rawdata derivatives \
 --img_types ct subreg cortex \
