@@ -90,7 +90,8 @@ class VerSe(Dataset):
         # TODO : Ask if it makes sense to apply spatialpad to test data
         # center crop 
 
-        return montransforms.SpatialPad((-1, -1, 160))
+        return tio.transforms.CropOrPad((128,86,136))  # Adjust the size according to your needs
+
 
         
 
