@@ -14,7 +14,7 @@ class VerSeDataModule(pl.LightningDataModule):
         super().__init__()
         self.processor = processor
         self.subjects = subjects
-        self.castellvi_classes = castellvi_classes
+        self.castellvi_classes = castellvi_classes # It makes sense to merge 3 and 4. Because 4 includes 3 inside. 
         self.pad_size = pad_size
         self.use_seg = use_seg
         self.use_binary_classes = use_binary_classes

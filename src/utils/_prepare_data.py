@@ -6,6 +6,7 @@ from BIDS import BIDS_Global_info, BIDS_Family, NII
 from BIDS.snapshot2D import create_snapshot,Snapshot_Frame,Visualization_Type,Image_Modes
 from pathlib import Path
 from tqdm import tqdm
+import yaml
 from pqdm.threads import pqdm
 
 class DataHandler:
@@ -338,6 +339,12 @@ class DataHandler:
         return bids_subjects, master_subjects
     
 
+
+def read_config(config_file):
+    with open(config_file, 'r') as file:
+        config = yaml.safe_load(file)
+    config['save_folder'] = "../experiments/{}/".format(config['model'])
+    return config
 
 def main():
     WORKING_DIR = "/data1/practical-sose23/"

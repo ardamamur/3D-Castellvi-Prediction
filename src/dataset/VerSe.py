@@ -36,6 +36,7 @@ class VerSe(Dataset):
 
     def __getitem__(self, index):
         # TODO : Do not apply cutout extraction for test images
+        # TODO : Only use multiple families subjects which included in master list
         bids_idx = self.bids_subjects[index]
         master_idx = self.master_subjects[index]
         family = self.processor._get_subject_family(subject=bids_idx)
@@ -72,11 +73,13 @@ class VerSe(Dataset):
         return one_hot
 
 
+    # Search for random rotation !!! -> see albumentations / kornia
     
     def get_transformations(self):
-        # TODO : Ask if it makes sense to apply random cropping to cutout ? 
+        # TODO : Ask if it makes sense to apply random cropping to cutout ?
+        # ANS : If you have a margin in core area than it make sense to apply transformations 
         transformations = tio.Compose([montransforms.RandSpatialCrop(roi_size=self.pad_size, random_center=True, random_size=False),
-                                       tio.RandomFlip(axes=(0, 1, 2)),
+                                       tio.RandomFlip(axes=(0, 1, 2)), # this does not make any sense (up and down doesnt make sense but left -> right (especcialy in 'a' cases) make sense (but you have to be careful for castellvi classes)). Always be sure to have correct ground truth 
                                        tio.RandomAffine(scales=0.1, isotropic=True)
                                        ])
         return transformations
@@ -84,6 +87,8 @@ class VerSe(Dataset):
 
     def get_test_transformations(self):
         # TODO : Ask if it makes sense to apply spatialpad to test data
+        # center crop 
+
         return montransforms.SpatialPad((-1, -1, 160))
 
         
