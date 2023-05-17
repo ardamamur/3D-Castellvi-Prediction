@@ -73,12 +73,18 @@ def main(params):
 
 
 if __name__ == '__main__':
-    # settings
+
+    if torch.cuda.is_available():
+        print('Running on GPU #', os.environ["CUDA_VISIBLE_DEVICES"])
+    else:
+        print('Running on CPU')
+
+    # Get Settings
     parser = argparse.ArgumentParser()
     parser.add_argument('--settings', type=str, default='/u/home/mamar/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
     args = parser.parse_args()
     params = read_config(args.settings)
     print(params)
-    #os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id # Use specific gpu -> default 3
-    #main(params=params)
-    # getting model
+
+    main(params=params)
+
