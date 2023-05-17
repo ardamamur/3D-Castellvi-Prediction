@@ -73,14 +73,15 @@ class VerSe(Dataset):
         return one_hot
 
 
-    # Search for random rotation !!! -> see albumentations / kornia
+    # Search for random rotation !!! -> see albumentations / kornia --> added random rotation by using torchio.randomaffine
     
     def get_transformations(self):
         # TODO : Ask if it makes sense to apply random cropping to cutout ?
         # ANS : If you have a margin in core area than it make sense to apply transformations 
         transformations = tio.Compose([montransforms.RandSpatialCrop(roi_size=self.pad_size, random_center=True, random_size=False),
-                                       tio.RandomFlip(axes=(0, 1, 2)), # this does not make any sense (up and down doesnt make sense but left -> right (especcialy in 'a' cases) make sense (but you have to be careful for castellvi classes)). Always be sure to have correct ground truth 
-                                       tio.RandomAffine(scales=0.1, isotropic=True)
+                                       #tio.RandomFlip(axes=(0, 1, 2)), # this does not make any sense (up and down doesnt make sense but left -> right (especcialy in 'a' cases) make sense (but you have to be careful for castellvi classes)). Always be sure to have correct ground truth 
+                                       tio.RandomFlip(axes=(2,)),
+                                       tio.RandomAffine(degrees=(10, 10, 10), scales=0.1, isotropic=True) # added random rotation
                                        ])
         return transformations
     
