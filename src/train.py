@@ -25,7 +25,7 @@ def main(params):
     verse_data_module = VerSeDataModule(processor,
                                         subjects=(bids_subjects, master_subjects),
                                         castellvi_classes=params.castellvi_classes,
-                                        pad_size=(128,128,128),
+                                        pad_size=(128,86,136),
                                         use_seg=params.use_seg,
                                         use_binary_classes=params.binary_classification, 
                                         batch_size=params.batch_size)

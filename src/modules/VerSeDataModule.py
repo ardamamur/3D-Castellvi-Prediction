@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 
 class VerSeDataModule(pl.LightningDataModule):
 
-    def __init__(self, processor:DataHandler, subjects, castellvi_classes:list, pad_size=(128,128,128), use_seg=False, use_binary_classes=True, batch_size=32):
+    def __init__(self, processor:DataHandler, subjects, castellvi_classes:list, pad_size=(128,86,136), use_seg=False, use_binary_classes=True, batch_size=32):
         super().__init__()
         self.processor = processor
         self.subjects = subjects

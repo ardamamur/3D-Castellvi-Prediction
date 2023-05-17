@@ -13,7 +13,7 @@ from utils._prepare_data import DataHandler
 
 
 class VerSe(Dataset):
-    def __init__(self, processor:DataHandler, subjects, castellvi_classes:list, pad_size=(128,128,128), use_seg=False, use_binary_classes=True, training=True, apply_transform=True) -> None:
+    def __init__(self, processor:DataHandler, subjects, castellvi_classes:list, pad_size=(128,86,136), use_seg=False, use_binary_classes=True, training=True, apply_transform=True) -> None:
         """
         Initialize an object of 
         """
