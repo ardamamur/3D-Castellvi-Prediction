@@ -71,7 +71,7 @@ def main(params):
 
 
 
-if __name__ == 'main':
+if __name__ == '__main__':
     # settings
     params = parse_opts()
     os.environ["CUDA_VISIBLE_DEVICES"] = params.gpu_id # Use specific gpu -> default 3
