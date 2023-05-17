@@ -6,6 +6,7 @@ export CUDA_VISIBLE_DEVICES=3
 export PYTHONPATH=$PYTHONPATH:/data1/practical-sose23/castellvi/castellvi_prediction/bids
 
 # call your training script with all the parameters
+# TODO : convert all list types to string
 python3 train.py \
 --data_root /data1/practical-sose23/dataset-verse19 /data1/practical-sose23/dataset-verse20 \
 --data_types rawdata derivatives \
