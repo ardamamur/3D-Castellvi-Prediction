@@ -343,8 +343,8 @@ class DataHandler:
 
 def read_config(config_file):
     with open(config_file, 'r') as file:
-        config = yaml.safe_load(file)
-    config['save_folder'] = "../experiments/{}/".format(config['model'])
+        config_dict = yaml.safe_load(file)
+    config_dict['save_folder'] = "../../experiments/{}/".format(config_dict['model'])
     config = types.SimpleNamespace(**config_dict)
     return config
 
