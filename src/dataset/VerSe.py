@@ -59,7 +59,7 @@ class VerSe(Dataset):
     def _get_binary_label(self, subject):
 
         binary_classes = []
-        if str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Castellvi'].values[0]) is not '0':
+        if str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Castellvi'].values[0]) != '0':
             binary_classes.append(1)
         else:
             binary_classes.append(0)
