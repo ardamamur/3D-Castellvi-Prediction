@@ -10,6 +10,7 @@ from monai import transforms as montransforms
 from torch.utils.data import Dataset
 from typing import Tuple, Union
 from utils._prepare_data import DataHandler
+from monai.transforms import Compose, Rotate, Flip, Pad
 
 
 class VerSe(Dataset):
@@ -29,6 +30,11 @@ class VerSe(Dataset):
         self.castellvi_dict = {category: i for i, category in enumerate(self.categories)}
         self.apply_transform = apply_transform
 
+        self.transform = tio.Compose([montransforms.RandSpatialCrop(roi_size=self.pad_size, random_center=True, random_size=False),
+                                       tio.RandomAffine(degrees=(10, 10, 10), scales=0.1, isotropic=True) # added random rotation
+                                    ])
+
+
     def __len__(self):
         return len(self.master_subjects)
 
@@ -46,14 +52,23 @@ class VerSe(Dataset):
 
         master_idx = self.master_subjects[index]
         img = self.processor._get_cutout(family=bids_family, return_seg=self.use_seg, max_shape=self.pad_size)
-        img = torch.from_numpy(img).unsqueeze(0)
-        #print(img.shape)
+        img = img[np.newaxis, ...]
+        print(img.shape)
         if self.binary:
             labels = self._get_binary_label(master_idx)
         else:
             labels = self._get_castellvi_label(master_idx)
-        labels = np.array(labels)
-        labels = labels.astype(np.float32)
+
+
+        if self.transform is not None:
+            inputs = self.transform(img)  # convert PIL Image to numpy array
+        
+        else:
+            inputs = torch.from_numpy(inputs)  # convert numpy array to PyTorch tensor
+
+        return {"target": inputs, "class": labels}
+        #labels = np.array(labels)
+        #labels = label.astype(np.float32)
 
 
         # if self.apply_transform:
@@ -63,17 +78,19 @@ class VerSe(Dataset):
         #     transform = self.get_test_transformations()
         #     img = transform(img)
 
-        return img, labels
+        #return img, labels
     
 
     def _get_binary_label(self, subject):
 
         binary_classes = []
         if str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Castellvi'].values[0]) != '0':
-            binary_classes.append(1)
+            #binary_classes.append(1)
+            return 1
         else:
-            binary_classes.append(0)
-        return np.array(binary_classes) 
+            #binary_classes.append(0)
+            return 0
+        #return np.array(binary_classes) 
     
     def _get_castellvi_label(self, subject):
 
