@@ -26,9 +26,10 @@ class DenseNet(pl.LightningModule):
         self.opt = opt
         self.val_step_outputs = []
         self.training_step_outputs = []
-        self.num_classes = opt.num_classes
+        self.num_classes = num_classes
         self.n_epoch = opt.n_epochs
-
+        self.scheduler_name = opt.scheduler
+        self.optimizer_name = opt.optimizer
         self.data_size = data_size  # 2d
         self.data_channel = data_channel
 
@@ -62,8 +63,13 @@ class DenseNet(pl.LightningModule):
             self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
 
     def configure_optimizers(self) -> dict:
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.opt.learning_rate)
-        lr_scheduler = self.init_lr_scheduler(optimizer)
+        
+        optimizer_dict = {
+            "Adam": torch.optim.Adam(self.parameters(), lr=self.opt.learning_rate),
+            "AdamW": torch.optim.Adam(self.parameters(), lr=self.opt.learning_rate),
+        }
+        optimizer = optimizer_dict[self.optimizer_name]
+        lr_scheduler = self.init_lr_scheduler(self.scheduler_name, optimizer)
         if lr_scheduler is not None:
             return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
         return {"optimizer": optimizer}
@@ -153,8 +159,7 @@ class DenseNet(pl.LightningModule):
         gt_cls_t = torch.cat(gt_cls_a).to(torch.int)
         return loss_t, predictions_t, pred_cls_t, gt_cls_t
 
-    def init_lr_scheduler(self, optimizer):
-        name = "polynomial"
+    def init_lr_scheduler(self, name, optimizer):
         scheduler_dict = {
             "cosine": lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.n_epoch, eta_min=1e-7),
             "exponential": lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=0.95),
@@ -173,35 +178,11 @@ class DenseNet(pl.LightningModule):
         Returns:
             modified and init network based on internal parameter
         """
-        if isinstance(id, int):
-            id = str(id)
-        else:
-            id = id.replace("dense", "")
-            id = id.replace("resnet", "")
-        print(id)
-        dict = {
-            #
-            "169": dense169,
-            "121": dense121,
-            "161": dense161,
-            "201": dense201,
-            #
-            "18": resnet18,
-            "34": resnet34,
-            "50": resnet50,
-            "101": resnet101,
-            "152": resnet152,
-            #
-            "m1693": monai_dense169_3d,
-            #
-        }
-        assert id in dict.keys(), f"could not find dense with net number {id}"
-
-        if true_3d:
-            warnings.warn("densenet: true_3d set, will ignore network_id and use monai_dense169_3d")
+        if id == "densenet":
             network_func = monai_dense169_3d
         else:
-            network_func = dict[id]
+            raise Exception("Not Implemented")
+        
         num_classes = self.num_classes
         return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained)
 

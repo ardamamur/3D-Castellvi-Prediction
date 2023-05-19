@@ -12,6 +12,25 @@ from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
 from modules.base_modules import *
 
+
+def model_dict():
+    models = {
+        "densenet" : "base",
+        "resnet" : "base",
+        "unet" : "base",
+        "3dcnn" : "base",
+        "detr" : "transformer"
+    }
+    return models
+
+
+def is_base(model_name:str):
+    assert model_name in model_dict().keys()
+    if model_dict()[model_name] == "base":
+        return True
+    return False
+
+
 def main(params):
     torch.manual_seed(params.manual_seed)
     # Initialize your data module
@@ -35,20 +54,24 @@ def main(params):
                                         batch_size=params.batch_size,
                                         test_data_path=params.test_data_path)
 
-    is_baseline = False
+    if params.binary_classification:
+        num_classes = 2
+    else:
+        num_classes = len(params.castellvi_classes)
+
+
     if params.model == 'resnet':
         model = ResNetLightning(params)
-        is_baseline = True
-    elif params.model == "dense169":
-        model = DenseNet(opt=params, num_classes=params.num_classes, data_size=(128,86,136), data_channel=1)
-        is_baseline = True
+    elif params.model == "densenet":
+        model = DenseNet(opt=params, num_classes=num_classes, data_size=(128,86,136), data_channel=1)
     else:
         raise Exception('Not Implemented')
-    
-    if is_baseline:
+
+    if is_base(params.model):
         experiment = params.experiments + '/baseline_models/' + params.model
     else:
         raise Exception('Not Implemented')
+    
 
     # Initialize Tensorboard
     logger = TensorBoardLogger(experiment+"/lightning_logs", default_hp_metric=False)
@@ -85,13 +108,11 @@ def main(params):
 
 def start_tensorboard(tracking_address: str):
     from tensorboard import program
-
     tb = program.TensorBoard()
     tb.configure(argv=[None, "--logdir", tracking_address, "--port", "8181"])
     url = tb.launch()
     print(f"Tensorflow listening on {url}")
     return tb
-
 
 
 

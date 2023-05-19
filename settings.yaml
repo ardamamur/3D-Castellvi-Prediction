@@ -21,6 +21,8 @@ castellvi_classes:
   - '0'
 use_seg: False
 phase: 'train'
+scheduler : "polynomial"
+optimizer : "Adam"
 learning_rate: 0.001
 weight_decay: 0.0001
 total_iterations: 100
@@ -34,6 +36,6 @@ pretrain_path: 'pretrain/resnet_50.pth'
 no_cuda: False
 gpu_id: '3'
 n_devices: 1
-model: 'dense169'
+model: 'densenet'
 manual_seed: 1
 num_classes : 2
