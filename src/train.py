@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     # Get Settings
     parser = argparse.ArgumentParser()
-    parser.add_argument('--settings', type=str, default='/u/home/mamar/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
+    parser.add_argument('--settings', type=str, default='/u/home/ank/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
     args = parser.parse_args()
     params = read_config(args.settings)
     print(params)
