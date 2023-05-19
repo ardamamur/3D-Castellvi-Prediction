@@ -34,5 +34,6 @@ pretrain_path: 'pretrain/resnet_50.pth'
 no_cuda: False
 gpu_id: '3'
 n_devices: 1
-model: 'resnet'
+model: 'dense169'
 manual_seed: 1
+num_classes : 2

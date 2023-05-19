@@ -10,6 +10,7 @@ from utils._get_model import *
 from utils._prepare_data import read_config
 from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
+from modules.base_modules import *
 
 def main(params):
     torch.manual_seed(params.manual_seed)
@@ -38,6 +39,9 @@ def main(params):
     if params.model == 'resnet':
         model = ResNetLightning(params)
         is_baseline = True
+    elif params.model == "dense169":
+        model = DenseNet(opt=params, num_classes=params.num_classes, data_size=(128,86,136), data_channel=1)
+        is_baseline = True
     else:
         raise Exception('Not Implemented')
     
@@ -47,7 +51,7 @@ def main(params):
         raise Exception('Not Implemented')
 
     # Initialize Tensorboard
-    logger = TensorBoardLogger(experiment)
+    logger = TensorBoardLogger(experiment+"/lightning_logs", default_hp_metric=False)
 
     # Define checkpoint callback
     checkpoint_callback = ModelCheckpoint(
@@ -58,13 +62,36 @@ def main(params):
         mode='min',
     )
 
+
     # Initialize a trainer
-    trainer = pl.Trainer(accelerator="gpu", max_epochs=params.n_epochs, check_val_every_n_epoch=1, devices=params.n_devices, callbacks=[checkpoint_callback], logger=logger)
+    trainer = pl.Trainer(accelerator="gpu",
+                         max_epochs=params.n_epochs,
+                         check_val_every_n_epoch=1,
+                         devices=params.n_devices,
+                         log_every_n_steps=min(32, params.batch_size),
+                         callbacks=[checkpoint_callback],
+                         logger=logger)
+
+    try:
+        tb = start_tensorboard(experiment+"/lightning_logs") # starting a tensorboard where you can see the lightning logs
+    except Exception as e:
+        print(f"Could not start tensor board, got error {e}")
+
 
     # Train the model ⚡
     model = model.cuda()
     # Pass your data module to the trainer
     trainer.fit(model, verse_data_module)
+
+def start_tensorboard(tracking_address: str):
+    from tensorboard import program
+
+    tb = program.TensorBoard()
+    tb.configure(argv=[None, "--logdir", tracking_address, "--port", "8181"])
+    url = tb.launch()
+    print(f"Tensorflow listening on {url}")
+    return tb
+
 
 
 

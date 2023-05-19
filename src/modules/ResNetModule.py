@@ -32,6 +32,7 @@ class ResNetLightning(pl.LightningModule):
         self.save_hyperparameters()
 
     def forward(self, x):
+        logits = self.model(x) # [-1, 1]
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
