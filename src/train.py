@@ -68,13 +68,13 @@ def main(params):
         raise Exception('Not Implemented')
 
     if is_base(params.model):
-        experiment = params.experiments + '/baseline_models/' + params.model
+        experiment = params.experiments + 'baseline_models/' + params.model
     else:
         raise Exception('Not Implemented')
     
 
     # Initialize Tensorboard
-    logger = TensorBoardLogger(experiment+"/lightning_logs", default_hp_metric=False)
+    logger = TensorBoardLogger(experiment, default_hp_metric=False)
 
     # Define checkpoint callback
     checkpoint_callback = ModelCheckpoint(
@@ -109,7 +109,7 @@ def main(params):
 def start_tensorboard(tracking_address: str):
     from tensorboard import program
     tb = program.TensorBoard()
-    tb.configure(argv=[None, "--logdir", tracking_address, "--port", "8181"])
+    tb.configure(argv=[None, "--logdir", tracking_address, "--port", "7878"])
     url = tb.launch()
     print(f"Tensorflow listening on {url}")
     return tb
