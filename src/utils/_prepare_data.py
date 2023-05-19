@@ -207,7 +207,7 @@ class DataHandler:
         
         if os.path.isfile(filepath + ".npy"):
             logging.info("Read saved file {} from disk".format(filepath))
-            return np.load(filepath)
+            return np.load(filepath + ".npy")
 
         seg_nii = family["msk_seg-vertsac"][0].open_nii()
         ctd = family["ctd_seg-vertsac"][0].open_cdt()
@@ -280,9 +280,9 @@ class DataHandler:
         seg_cutouts = pqdm(args, seg_fun, n_jobs = n_jobs)
         ct_cutouts = pqdm(args, ct_fun, n_jobs = n_jobs)
         for cutout in seg_cutouts:
-            assert(cutout.shape() == max_shape)
+            assert(cutout.shape == max_shape)
         for cutout in ct_cutouts:
-            assert(cutout.shape() == max_shape)
+            assert(cutout.shape == max_shape)
     
     def _get_subject_name(self, subject:str):
         subject_name = None
