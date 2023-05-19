@@ -78,7 +78,7 @@ Update train_model.sh
 ```
 
 
-## 🔧 Running the tests <a name = "tests"></a>
+## 🔧 Running the training <a name = "tests"></a>
 
 
 Run the bashscript
