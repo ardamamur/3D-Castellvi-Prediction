@@ -9,6 +9,10 @@ import types
 from tqdm import tqdm
 import yaml
 from pqdm.threads import pqdm
+import logging
+import os
+
+from functools import partial
 
 class DataHandler:
     def __init__(self, master_list: str, dataset:list, data_types:list, image_types:list) -> None:
@@ -185,7 +189,7 @@ class DataHandler:
         return ap_slice, lr_slice, is_slice
 
 
-    def _get_cutout(self, family:BIDS_Family, return_seg=False, max_shape=(135, 181, 126)) -> NII:
+    def _get_cutout(self, family:BIDS_Family, return_seg=False, max_shape=(128, 86, 136), save_dir = '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data'):
         """
         Args:
             BIDS Family, return_seg (instead of ct), max_shape
@@ -194,6 +198,17 @@ class DataHandler:
             Cutouts generally contains the full lowest vertebra and are always padded to max_shape
     
         """
+        assert(save_dir != None)
+
+        dir_path = save_dir + "/cutouts/shape_{}_{}_{}".format(max_shape[0], max_shape[1], max_shape[2])
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        filepath = save_dir + "/cutouts/shape_{}_{}_{}/{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], family.get_identifier(), "seg" if return_seg else "ct")
+        
+        if os.path.isfile(filepath + ".npy"):
+            logging.info("Read saved file {} from disk".format(filepath))
+            return np.load(filepath + ".npy")
+
         seg_nii = family["msk_seg-vertsac"][0].open_nii()
         ctd = family["ctd_seg-vertsac"][0].open_cdt()
         ctd.zoom = seg_nii.zoom
@@ -235,17 +250,41 @@ class DataHandler:
             seg_cutout = seg_arr[ap_slice, is_slice, lr_slice]
             #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
             seg_cutout = np.pad(seg_cutout, [(0, max_shape[i] - seg_cutout.shape[i]) for i in range(len(seg_cutout.shape))],"constant")
-            return self._get_array(seg_nii.set_array(seg_cutout))
+            np.save(filepath, arr = seg_cutout)
+            logging.info("Saved new seg file {}".format(filepath))
+            return seg_cutout
         else:
             ct_arr = ct_nii.get_array()
             ct_cutout = ct_arr[ap_slice, is_slice, lr_slice]
             #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
             ct_cutout = np.pad(ct_cutout, [(0, max_shape[i] - ct_cutout.shape[i]) for i in range(len(ct_cutout.shape))],"constant")
-            return self._get_array(ct_nii.set_array(ct_cutout))
+            np.save(filepath, arr = ct_cutout)
+            logging.info("Saved new CT file {}".format(filepath))
+            return ct_cutout
 
+    def _prepare_cutouts(self, multi_family_subjects, save_dir = '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data', max_shape=(128, 86, 136), n_jobs = 8):
+
+        args = []
+        assert(save_dir != None)
+
+        for subject in tqdm(self.bids.subjects):
+            if not self._is_multi_family(subject, families=multi_family_subjects):
+                sub_name, exists = self._get_subject_name(subject=subject)
+                if exists:
+                    family = self._get_subject_family(subject=subject)
+                    args.append(family)
+        
+        seg_fun = partial(self._get_cutout, return_seg = True, max_shape = max_shape, save_dir = save_dir)
+        ct_fun = partial(self._get_cutout, return_seg = False, max_shape = max_shape, save_dir = save_dir)
+        
+        seg_cutouts = pqdm(args, seg_fun, n_jobs = n_jobs)
+        ct_cutouts = pqdm(args, ct_fun, n_jobs = n_jobs)
+        for cutout in seg_cutouts:
+            assert(cutout.shape == max_shape)
+        for cutout in ct_cutouts:
+            assert(cutout.shape == max_shape)
     
     def _get_subject_name(self, subject:str):
-        
         subject_name = None
         for sub in self.subject_list:
             if subject in sub:
@@ -359,18 +398,20 @@ def read_config(config_file):
     return config
 
 def main():
-    params = read_config('/u/home/mamar/3D-Castellvi-Prediction/settings.yaml')
-    print(params.n_epochs*2)
+    #params = read_config('/u/home/mamar/3D-Castellvi-Prediction/settings.yaml')
+    #print(params.n_epochs*2)
     WORKING_DIR = "/data1/practical-sose23/"
+    logging.basicConfig(filename=WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/data/prepare_data.log', encoding='utf-8', level=logging.DEBUG)
     dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg", "cortex"]
     master_list = WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
     processor._drop_missing_entries()
-    # families = processor._get_families()
+    families = processor._get_families()
     # print(families)
-    #multi_family_subjects = processor._get_subjects_with_multiple_families(families)
+    multi_family_subjects = processor._get_subjects_with_multiple_families(families)
+    processor._prepare_cutouts(multi_family_subjects=multi_family_subjects, max_shape=(128,86,136), n_jobs = 8, save_dir = WORKING_DIR + "castellvi/3D-Castellvi-Prediction/data")
     #max_shape = processor._get_max_shape(multi_family_subjects)
     #print(max_shape)
     # max_ct, max_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=True)
@@ -389,7 +430,7 @@ def main():
     # for i,j in zip(bids_subjects, master_subjects):
     #     print(i, '---', j)
     family = subjects[0][0]
-    img = processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136))
+    img = processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136), save_dir = WORKING_DIR + "castellvi/3D-Castellvi-Prediction/data")
     print(type(img))
     #print(img.get_array())
     return
