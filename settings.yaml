@@ -30,7 +30,7 @@ batch_size: 1
 save_intervals: 10
 n_epochs: 200
 resume_path: ''
-experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments'
+experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/'
 test_data_path : '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/test_list.txt'
 pretrain_path: 'pretrain/resnet_50.pth'
 no_cuda: False
