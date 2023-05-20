@@ -109,7 +109,7 @@ def main(params):
 def start_tensorboard(tracking_address: str):
     from tensorboard import program
     tb = program.TensorBoard()
-    tb.configure(argv=[None, "--logdir", tracking_address, "--port", "7878"])
+    tb.configure(argv=[None, "--logdir", tracking_address, "--port", "6464"])
     url = tb.launch()
     print(f"Tensorflow listening on {url}")
     return tb
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     # Get Settings
     parser = argparse.ArgumentParser()
-    parser.add_argument('--settings', type=str, default='/u/home/mamar/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
+    parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
     args = parser.parse_args()
     params = read_config(args.settings)
     print(params)
