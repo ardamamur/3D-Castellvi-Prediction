@@ -46,31 +46,16 @@ class DenseNet(pl.LightningModule):
         logits = self.network(x)  # [-1, 1]
         return logits
 
-    # def training_step(self, batch, batch_idx) -> dict[str, typing.Any]:
-    #     target = batch["target"]
-    #     result = self.calc_pred(batch, detach2cpu=False)
-    #     loss = result["loss"]
-    #     self.training_step_outputs.append(result)
-    #     self.log("train_loss", loss, batch_size=target.shape[0])
-    #     print(f"Training Loss: {loss:.4f}")
-    #     return result
 
     def training_step(self, batch, batch_idx):
         target = batch["target"]
         result = self.calc_pred(batch, detach2cpu=False)
         loss = result["loss"]
         self.training_step_outputs.append(result)
-        print(f"Training Loss: {loss:.4f}")
+        self.logger.info(f"Training Loss: {loss:.4f}")
         return {"loss": loss}  # return the loss here, we will use it later
 
 
-    # def on_train_epoch_end(self) -> None:
-    #     if self.training_step_outputs is not None:
-    #         loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.training_step_outputs)
-    #         acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
-    #         f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
-    #         self.logger.experiment.add_scalar("train_cohen_acc", acc, self.current_epoch)
-    #         self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
 
     def on_train_epoch_end(self) -> None:
         if self.training_step_outputs is not None:
@@ -78,8 +63,11 @@ class DenseNet(pl.LightningModule):
             self.log("train_loss", avg_loss, on_epoch=True)  # Log the average loss
 
             loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.training_step_outputs)
-            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
-            f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
+
+            matthews_acc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            self.logger.experiment.add_scalar('train_matthews_acc', matthews_acc, self.current_epoch)
             self.logger.experiment.add_scalar("train_cohen_acc", acc, self.current_epoch)
             self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
 
@@ -89,8 +77,8 @@ class DenseNet(pl.LightningModule):
     def configure_optimizers(self) -> dict:
         
         optimizer_dict = {
-            "Adam": torch.optim.Adam(self.parameters(), lr=self.opt.learning_rate),
-            "AdamW": torch.optim.Adam(self.parameters(), lr=self.opt.learning_rate),
+            "Adam": torch.optim.Adam(self.parameters(), lr=self.opt.learning_rate, weight_decay=self.opt.weight_decay),
+            "AdamW": torch.optim.AdamW(self.parameters(), lr=self.opt.learning_rate, weight_decay=self.opt.weight_decay),
         }
         optimizer = optimizer_dict[self.optimizer_name]
         lr_scheduler = self.init_lr_scheduler(self.scheduler_name, optimizer)
@@ -101,11 +89,12 @@ class DenseNet(pl.LightningModule):
     def loss_function(self, logits: torch.Tensor, labels: torch.Tensor) -> float:
         loss = self.cross_entropy(logits, labels)
 
-        if self.l2_reg_w > 0.0:
-            l2_reg = torch.tensor(0.0, device=self.device).to(non_blocking=True)
-            for param in self.parameters():
-                l2_reg += torch.norm(param).to(self.device, non_blocking=True)
-            loss += l2_reg * self.l2_reg_w
+        # if self.l2_reg_w > 0.0:
+        #     l2_reg = torch.tensor(0.0, device=self.device).to(non_blocking=True)
+        #     for param in self.parameters():
+        #         l2_reg += torch.norm(param).to(self.device, non_blocking=True)
+        #     loss += l2_reg * self.l2_reg_w
+        # return loss
         return loss
 
     def calc_pred(self, batch, detach2cpu: bool = False) -> dict:
@@ -140,13 +129,15 @@ class DenseNet(pl.LightningModule):
             loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.val_step_outputs)
             loss = torch.mean(loss_a)
             self.log("val_loss", loss, on_epoch=True)
+            
+            matthews_acc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            f1_p_cls = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, average="none", num_classes=self.num_classes, task='multiclass')
+            prec = mF.precision(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
 
-            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
-            f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
-            f1_p_cls = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, average="none", num_classes=self.num_classes, task='binary')
-            prec = mF.precision(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
-
-            confmat = mF.confusion_matrix(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
+            confmat = mF.confusion_matrix(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            
             try:
                 import seaborn as sns
                 df_cm = pd.DataFrame(confmat.numpy(), index=range(self.num_classes), columns=range(self.num_classes))
@@ -158,6 +149,7 @@ class DenseNet(pl.LightningModule):
                 print("caught exception in confusion matrix", e)
 
             # Log important validation values
+            self.logger.experiment.add_scalar('train_matthews_acc', matthews_acc, self.current_epoch)
             self.logger.experiment.add_scalar("val_cohen_acc", acc, self.current_epoch)
             self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
             self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
