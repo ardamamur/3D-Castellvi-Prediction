@@ -21,7 +21,6 @@ class VerSeDataModule(pl.LightningDataModule):
         self.use_binary_classes = use_binary_classes
         self.batch_size = batch_size
         self.train_val_test_split = train_val_test_split
-        #self.test_data_path = test_data_path
         self.master_df = pd.read_excel(master_list)
 
 

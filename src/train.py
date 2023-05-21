@@ -47,12 +47,12 @@ def main(params):
 
     verse_data_module = VerSeDataModule(processor,
                                         subjects=subjects,
+                                        master_list=params.master_list_v2,
                                         castellvi_classes=params.castellvi_classes,
                                         pad_size=(128,86,136),
                                         use_seg=params.use_seg,
                                         use_binary_classes=params.binary_classification, 
-                                        batch_size=params.batch_size,
-                                        test_data_path=params.test_data_path)
+                                        batch_size=params.batch_size,)
 
     if params.binary_classification:
         num_classes = 2

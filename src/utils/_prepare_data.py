@@ -412,34 +412,16 @@ def main():
     # print(families)
     multi_family_subjects = processor._get_subjects_with_multiple_families(families)
     processor._prepare_cutouts(multi_family_subjects=multi_family_subjects, max_shape=(128,86,136), n_jobs = 8, save_dir = WORKING_DIR + "castellvi/3D-Castellvi-Prediction/data")
-    #max_shape = processor._get_max_shape(multi_family_subjects)
-    #print(max_shape)
-    # max_ct, max_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=True)
-    # min_ct, min_seg = processor._get_resize_shape_V2(multi_family_subjects, is_max=False)
-    # print('max_ct_shape:', max_ct)
-    # print('max_seg_shape:', max_seg)
-    # print('min_ct_shape:', min_ct)
-    # print('min_seg_shape:', min_seg)
+
     bids_subjects, master_subjects = processor._get_subject_samples()
     bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
     subjects = (bids_families, master_subjects)
-    # print(len(subjects[0]))
-    # print(len(subjects[1]))
-    # print(len(subjects))
-    #print(bids_families)
-    # for i,j in zip(bids_subjects, master_subjects):
-    #     print(i, '---', j)
     family = subjects[0][0]
     img = processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136), save_dir = WORKING_DIR + "castellvi/3D-Castellvi-Prediction/data")
     print(type(img))
-    #print(img.get_array())
     return
-    for family in tqdm(subjects[0]):
-        print(family)
-        
-        break
 
     
     
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
