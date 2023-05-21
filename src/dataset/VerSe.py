@@ -45,7 +45,7 @@ class VerSe(Dataset):
         #family = self.processor._get_subject_family(subject=bids_idx)
         #last_l = self.processor.master_df.loc[self.processor.master_df['Full_Id'] == master_idx, 'Last_L'].values
         #roi_object_idx = self.processor._get_roi_object_idx(roi_parts=[last_l, 'S1'])
-        print("Getting item", index)
+        #print("Getting item", index)
 
         bids_family = self.bids_subjects[index]
         #print(bids_family)
@@ -53,7 +53,7 @@ class VerSe(Dataset):
         master_idx = self.master_subjects[index]
         img = self.processor._get_cutout(family=bids_family, return_seg=self.use_seg, max_shape=self.pad_size)
         img = img[np.newaxis, ...]
-        print(img.shape)
+        #print(img.shape)
         if self.binary:
             labels = self._get_binary_label(master_idx)
         else:

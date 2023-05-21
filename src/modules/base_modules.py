@@ -46,21 +46,45 @@ class DenseNet(pl.LightningModule):
         logits = self.network(x)  # [-1, 1]
         return logits
 
-    def training_step(self, batch, batch_idx) -> dict[str, typing.Any]:
+    # def training_step(self, batch, batch_idx) -> dict[str, typing.Any]:
+    #     target = batch["target"]
+    #     result = self.calc_pred(batch, detach2cpu=False)
+    #     loss = result["loss"]
+    #     self.training_step_outputs.append(result)
+    #     self.log("train_loss", loss, batch_size=target.shape[0])
+    #     print(f"Training Loss: {loss:.4f}")
+    #     return result
+
+    def training_step(self, batch, batch_idx):
         target = batch["target"]
         result = self.calc_pred(batch, detach2cpu=False)
         loss = result["loss"]
         self.training_step_outputs.append(result)
-        self.log("train_loss", loss, batch_size=target.shape[0])
-        return result
+        print(f"Training Loss: {loss:.4f}")
+        return {"loss": loss}  # return the loss here, we will use it later
+
+
+    # def on_train_epoch_end(self) -> None:
+    #     if self.training_step_outputs is not None:
+    #         loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.training_step_outputs)
+    #         acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
+    #         f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
+    #         self.logger.experiment.add_scalar("train_cohen_acc", acc, self.current_epoch)
+    #         self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
 
     def on_train_epoch_end(self) -> None:
         if self.training_step_outputs is not None:
+            avg_loss = torch.stack([x['loss'] for x in self.training_step_outputs]).mean()  # Calculate average loss over the epoch
+            self.log("train_loss", avg_loss, on_epoch=True)  # Log the average loss
+
             loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.training_step_outputs)
             acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
             f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='binary')
             self.logger.experiment.add_scalar("train_cohen_acc", acc, self.current_epoch)
             self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
+
+            self.training_step_outputs = []  # Clear the outputs at the end of each epoch
+
 
     def configure_optimizers(self) -> dict:
         

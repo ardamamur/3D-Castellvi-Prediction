@@ -79,12 +79,11 @@ def main(params):
     # Define checkpoint callback
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
-        dirpath=experiment + '/best_models/',
+        dirpath=f'{experiment}/best_models/version_{logger.version}',
         filename=params.model + '-{epoch:02d}-{val_loss:.2f}',
         save_top_k=5,
         mode='min',
     )
-
 
     # Initialize a trainer
     trainer = pl.Trainer(accelerator="gpu",
@@ -96,7 +95,7 @@ def main(params):
                          logger=logger)
 
     try:
-        tb = start_tensorboard(experiment+"/lightning_logs") # starting a tensorboard where you can see the lightning logs
+        tb = start_tensorboard(params.port, experiment+"/lightning_logs") # starting a tensorboard where you can see the lightning logs
     except Exception as e:
         print(f"Could not start tensor board, got error {e}")
 
@@ -106,10 +105,10 @@ def main(params):
     # Pass your data module to the trainer
     trainer.fit(model, verse_data_module)
 
-def start_tensorboard(tracking_address: str):
+def start_tensorboard(port, tracking_address: str):
     from tensorboard import program
     tb = program.TensorBoard()
-    tb.configure(argv=[None, "--logdir", tracking_address, "--port", "6464"])
+    tb.configure(argv=[None, "--logdir", tracking_address, "--port", str(port)])
     url = tb.launch()
     print(f"Tensorflow listening on {url}")
     return tb

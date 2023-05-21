@@ -26,7 +26,7 @@ optimizer : "Adam"
 learning_rate: 0.001
 weight_decay: 0.0001
 total_iterations: 100
-batch_size: 1
+batch_size: 16
 save_intervals: 10
 n_epochs: 200
 resume_path: ''
@@ -39,3 +39,4 @@ n_devices: 1
 model: 'densenet'
 manual_seed: 1
 num_classes : 2
+port : 9336
