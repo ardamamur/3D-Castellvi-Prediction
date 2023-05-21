@@ -1,4 +1,9 @@
+import sys
+
+sys.path.append('/u/home/ank/3D-Castellvi-Prediction/bids')
+
 import os
+
 import torch
 import argparse
 import pytorch_lightning as pl
@@ -10,7 +15,8 @@ from utils._get_model import *
 from utils._prepare_data import read_config
 from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
-from src.modules.DenseNetModule import *
+from modules.DenseNetModule import *
+from dataset.VerSe import *
 
 def load_model(path, params):
     checkpoint = torch.load(path)
@@ -19,72 +25,73 @@ def load_model(path, params):
     return model
 
 
-def get_predictions(model, image_paths, use_seg:bool=False):
+def get_predictions(model):
     softmax = nn.Softmax(dim=1)
     predictions = []
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model.to(device)
-    # model.eval()
-    for path in image_paths:
-        # Load and preprocess the image
-        # TODO : if use_seg == False -> check for if "masked" not in path
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
 
-        img = []
-        cutouts = os.listdir(path)
-        for i in cutouts:
-            if use_seg:
-                if "label" in i and "masked" in i:
-                    print(i)
-                    img = np.load(i)
-                else:
-                    pass
-            else:
-                print(i)
-                if "label" in i and "masked" not in i:
-                    print(i)
-                    img = np.load(i)
-                else:
-                    pass
-            
+    masterlist_v2 = pd.read_excel('/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V2.xlsx', index_col=0) 
+    masterlist_v2
+    validation_img = []
+    i = 0
+    processor = DataHandler(master_list=params.master_list,
+                            dataset=params.data_root,
+                            data_types=params.data_types,
+                            image_types=params.img_types
+                        )
 
-        # img = img[np.newaxis, ...]
-        # img = img.to(device)
+    processor._drop_missing_entries()
+    bids_subjects, master_subjects = processor._get_subject_samples()
+    bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
 
-        # # Perform inference
-        # with torch.no_grad():
-        #     output = model(img)
-        #     pred_x = softmax(output)  # , dim=1)
-        #     _, pred_cls = torch.max(pred_x, 1)
-        #     print(output:" , output.data)
-        #     print("pred:", pred_cls)
+    val_img = []
+    dict_castellvi = {}
+    dict_predict = {}
+    dict_conf_matrix = {'0' : [0,0] , '1a': [0,0], '1b':  [0,0], '2a' : [0,0] , '2b':  [0,0], '3a':  [0,0], '3b': [0,0], '4': [0,0]}
 
-    #return predictions
+    for index in range(len(bids_subjects)):
+        df = masterlist_v2.loc[masterlist_v2['Full_Id'] == master_subjects[index]]
+        if df['Split'].values == 'test':
+            bids_family = bids_families[index]
+            dict_castellvi[master_subjects[index]] = str(df['Castellvi'].values[0])
+            img = processor._get_cutout(family = bids_family, return_seg = False, max_shape = (128,86,136))
+            img = img[np.newaxis, ...]
+            img = img[np.newaxis, ...]
+            img = torch.from_numpy(img)
+            img = img.float() 
+            img = img.to(device)
 
-def get_test_list(test_list):
-    with open(test_list, 'r') as file:
-        lines = file.readlines()
-        lines = [line.strip() for line in lines]  # Optional: Remove leading/trailing whitespace
-
-    return lines
+            with torch.no_grad():
+                output = model(img)
+                pred_x = softmax(output)  # , dim=1)
+                _, pred_cls = torch.max(pred_x, 1)
+                #print("pred:", pred_cls)
+                pred_cls_str = str(pred_cls.item())
+                dict_predict[master_subjects[index]] = pred_cls_str
 
 
-def get_img_list(test_list):
-    img_paths = []
-    test_subs = get_test_list(test_list)
-    master_list = pd.read_excel("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_year.xlsx")
-    for i in test_subs:
-        year = master_list.loc[master_list['Full_Id'] == i]['year'].values[0]
-        img_path = "/data1/practical-sose23/dataset-verse" + year + "/derivatives/" + i + "/cutout"
-        img_paths.append(img_path)
-    return img_paths 
+    for key in dict_castellvi.keys():
+        print(type(dict_castellvi[key]), type(dict_predict[key]))
+        if dict_castellvi[key] != '0' and dict_predict[key] != '1':
+            dict_conf_matrix[str(dict_castellvi[key])][1] += 1
+        elif dict_castellvi[key] != '0' and dict_predict[key] == '1':
+            dict_conf_matrix[str(dict_castellvi[key])][0] += 1
+        elif dict_castellvi[key] == '0' and str(dict_predict[key]) != '0':
+            dict_conf_matrix[str(dict_castellvi[key])][1] += 1
+        elif dict_castellvi[key] == '0' and str(dict_predict[key]) == '0':
+            dict_conf_matrix[str(dict_castellvi[key])][0] += 1
+
+    print(dict_conf_matrix)
+
+
 
 
 def main(params):
-    img_paths = get_img_list(params.test_data_path)
-    print(img_paths)
-    ckpt_path = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/best_models/densenet-epoch=99-val_loss=2.72.ckpt"
+    ckpt_path = '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/best_models/version_2/densenet-epoch=199-val_loss=1.85.ckpt'
     model = load_model(path=ckpt_path, params=params)
-    get_predictions(model, img_paths, use_seg=False)
+    get_predictions(model)
 
 if __name__ == '__main__':
 
@@ -95,3 +102,4 @@ if __name__ == '__main__':
     params = read_config(args.settings)
     print(params)
     main(params=params)
+    
