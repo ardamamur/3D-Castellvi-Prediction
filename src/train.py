@@ -10,7 +10,7 @@ from utils._get_model import *
 from utils._prepare_data import read_config
 from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
-from modules.base_modules import *
+from src.modules.DenseNetModule import *
 
 
 def model_dict():

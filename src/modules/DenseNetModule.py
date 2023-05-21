@@ -9,7 +9,7 @@ from torch import nn
 import pytorch_lightning as pl
 import torchmetrics.functional as mF
 
-from models.base_models import *
+from src.models.DenseNet3D import *
 from torch.optim import lr_scheduler
 import pandas as pd
 import matplotlib.pyplot as plt

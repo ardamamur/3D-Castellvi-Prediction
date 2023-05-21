@@ -9,6 +9,7 @@ img_types:
   - 'subreg'
   - 'cortex'
 master_list: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
+master_list_v2 : '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V2.xlsx'
 binary_classification: True
 castellvi_classes: 
   - '1a'
@@ -31,8 +32,6 @@ save_intervals: 10
 n_epochs: 200
 resume_path: ''
 experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/'
-test_data_path : '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/test_list.txt'
-pretrain_path: 'pretrain/resnet_50.pth'
 no_cuda: False
 gpu_id: '3'
 n_devices: 1
