@@ -73,16 +73,16 @@ class VerSe(Dataset):
 
     def get_transformations(self):
 
-        transformations = montransforms.Compose([montransforms.transforms.CenterSpatialCrop(128,86,136),
-                                                montransforms.transforms.HorizontalFlip(prob=0.5),
-                                                montransforms.transforms.RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
+        transformations = montransforms.Compose([montransforms.CenterSpatialCrop(roi_size=[128,86,136]),
+                                                montransforms.RandFlip(prob=0.5, spatial_axis=2), # flips along width for a horizontal flip
+                                                montransforms.RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
                                                 ])
         return transformations
     
 
     def get_test_transformations(self):
-        transformations = montransforms.Compose([montransforms.transforms.CenterSpatialCrop(128,86,136),
-                                                montransforms.transforms.RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
+        transformations = montransforms.Compose([montransforms.CenterSpatialCrop(roi_size=[128,86,136]),
+                                                montransforms.RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
                                                 ])
         return transformations
     

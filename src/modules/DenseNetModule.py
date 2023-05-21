@@ -52,7 +52,7 @@ class DenseNet(pl.LightningModule):
         result = self.calc_pred(batch, detach2cpu=False)
         loss = result["loss"]
         self.training_step_outputs.append(result)
-        self.logger.info(f"Training Loss: {loss:.4f}")
+        print(f"Training Loss: {loss.item():.4f}")
         return {"loss": loss}  # return the loss here, we will use it later
 
 
@@ -149,7 +149,7 @@ class DenseNet(pl.LightningModule):
                 print("caught exception in confusion matrix", e)
 
             # Log important validation values
-            self.logger.experiment.add_scalar('train_matthews_acc', matthews_acc, self.current_epoch)
+            self.logger.experiment.add_scalar('val_matthews_acc', matthews_acc, self.current_epoch)
             self.logger.experiment.add_scalar("val_cohen_acc", acc, self.current_epoch)
             self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
             self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
