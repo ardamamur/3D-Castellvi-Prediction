@@ -110,6 +110,7 @@ def get_predictions(model):
 
 
     print(dict_conf_matrix)
+    return dict_conf_matrix
 
 
 
