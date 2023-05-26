@@ -83,7 +83,13 @@ class DenseNet(pl.LightningModule):
         optimizer = optimizer_dict[self.optimizer_name]
         lr_scheduler = self.init_lr_scheduler(self.scheduler_name, optimizer)
         if lr_scheduler is not None:
-            return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": lr_scheduler,
+                    "monitor": "val_loss",
+                },
+            }
         return {"optimizer": optimizer}
 
     def loss_function(self, logits: torch.Tensor, labels: torch.Tensor) -> float:
@@ -179,6 +185,7 @@ class DenseNet(pl.LightningModule):
         scheduler_dict = {
             "cosine": lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.n_epoch, eta_min=1e-7),
             "exponential": lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=0.95),
+            "ReduceLROnPlateau" : lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True),
             "polynomial": lr_scheduler.PolynomialLR(optimizer, total_iters=self.opt.total_iterations, power=0.9),
         }
         if name in scheduler_dict:

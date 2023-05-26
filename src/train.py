@@ -34,6 +34,7 @@ def is_base(model_name:str):
 def main(params):
     torch.manual_seed(params.manual_seed)
     # Initialize your data module
+    print(params)
     processor = DataHandler(master_list=params.master_list,
                             dataset=params.data_root,
                             data_types=params.data_types,

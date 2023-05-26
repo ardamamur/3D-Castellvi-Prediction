@@ -22,14 +22,14 @@ castellvi_classes:
   - '0'
 use_seg: False
 phase: 'train'
-scheduler : "polynomial"
+scheduler : "ReduceLROnPlateau"
 optimizer : "AdamW"
 learning_rate: 0.001
 weight_decay: 0.0001
 total_iterations: 100
-batch_size: 16
+batch_size: 32
 save_intervals: 10
-n_epochs: 200
+n_epochs: 500
 resume_path: ''
 experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/'
 no_cuda: False
@@ -38,4 +38,4 @@ n_devices: 1
 model: 'densenet'
 manual_seed: 1
 num_classes : 2
-port : 9336
+port : 6993
