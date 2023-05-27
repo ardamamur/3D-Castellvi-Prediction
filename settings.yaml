@@ -38,4 +38,4 @@ n_devices: 1
 model: 'densenet'
 manual_seed: 1
 num_classes : 2
-port : 6993
+port : 6995
