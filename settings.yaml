@@ -10,7 +10,7 @@ img_types:
   - 'cortex'
 master_list: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
 master_list_v2 : '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V2.xlsx'
-binary_classification: True
+binary_classification: False
 castellvi_classes: 
   - '1a'
   - '1b'
@@ -27,9 +27,9 @@ optimizer : "AdamW"
 learning_rate: 0.001
 weight_decay: 0.0001
 total_iterations: 100
-batch_size: 32
+batch_size: 8
 save_intervals: 10
-n_epochs: 500
+n_epochs: 100
 resume_path: ''
 experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/'
 no_cuda: False
@@ -37,5 +37,5 @@ gpu_id: '3'
 n_devices: 1
 model: 'densenet'
 manual_seed: 1
-num_classes : 2
-port : 6995
+num_classes : 4
+port : 6974

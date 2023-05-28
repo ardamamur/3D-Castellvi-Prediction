@@ -47,7 +47,7 @@ class VerSeDataModule(pl.LightningDataModule):
 
         if stage in {'fit', None}:
             self.train_dataset = VerSe(self.processor, (bids_train, master_train), self.castellvi_classes, self.pad_size, self.use_seg, self.use_binary_classes, training=True)
-            self.val_dataset = VerSe(self.processor, (bids_val, master_val), self.castellvi_classes, self.pad_size, self.use_seg, self.use_binary_classes, training=True)
+            self.val_dataset = VerSe(self.processor, (bids_val, master_val), self.castellvi_classes, self.pad_size, self.use_seg, self.use_binary_classes, training=False)
             
         if stage in {'test', None}: 
             self.test_dataset = VerSe(self.processor, (bids_test, master_test), self.castellvi_classes, self.pad_size, self.use_seg, self.use_binary_classes, training=False)

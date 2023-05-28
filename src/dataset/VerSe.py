@@ -46,7 +46,7 @@ class VerSe(Dataset):
         if self.binary:
             labels = self._get_binary_label(master_idx)
         else:
-            labels = self._get_castellvi_label(master_idx)
+            labels = self._get_castellvi_side_labels(master_idx)
 
         if self.training:
             inputs = self.transformations(img) 
@@ -58,7 +58,6 @@ class VerSe(Dataset):
 
     def _get_binary_label(self, subject):
 
-        binary_classes = []
         if str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Castellvi'].values[0]) != '0':
             return 1
         else:
@@ -70,6 +69,33 @@ class VerSe(Dataset):
         one_hot = np.zeros(len(self.categories))    
         one_hot[self.category_dict[castellvi]] = 1
         return one_hot
+
+
+    def _get_castellvi_side_labels(self, subject):
+        castellvi = str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Castellvi'].values[0])
+        # side = str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Side'].values[0])
+        
+        # Split the string into class and subclass (if it exists)
+        castellvi_class, castellvi_subclass = None, None
+        if len(castellvi) > 1:
+            # if the class is not 0 or 4 
+            castellvi_class, castellvi_subclass = castellvi[0], castellvi[1]
+            if castellvi_subclass.upper() == "A":
+               castellvi_subclass = 0
+            else:
+                castellvi_subclass = castellvi_class
+        else:
+            # if the class is 0 or 4
+            
+            # if castellvi_class == '4':
+            #     castellvi_class = 2
+            #     castellvi_subclass = 3
+
+            castellvi_class = castellvi
+            castellvi_subclass = 0
+
+        return [int(castellvi_class), int(castellvi_subclass)]
+
 
     def get_transformations(self):
 

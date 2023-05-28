@@ -55,16 +55,10 @@ def main(params):
                                         use_binary_classes=params.binary_classification, 
                                         batch_size=params.batch_size,)
 
-    if params.binary_classification:
-        num_classes = 2
-    else:
-        num_classes = len(params.castellvi_classes)
-
-
     if params.model == 'resnet':
         model = ResNetLightning(params)
     elif params.model == "densenet":
-        model = DenseNet(opt=params, num_classes=num_classes, data_size=(128,86,136), data_channel=1)
+        model = DenseNet(opt=params, num_classes=params.num_classes, data_size=(128,86,136), data_channel=1)
     else:
         raise Exception('Not Implemented')
 
@@ -103,6 +97,7 @@ def main(params):
 
     # Train the model ⚡
     model = model.cuda()
+    torch.autograd.set_detect_anomaly(True)
     # Pass your data module to the trainer
     trainer.fit(model, verse_data_module)
 
