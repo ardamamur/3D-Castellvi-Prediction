@@ -6,6 +6,6 @@ from models.ResNet3D import ResNet
 from models.UNet3D import UNet3D
 from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
-from models.base_models import *
+from models.DenseNet3D import *
 
 _all_ = [ VerSe, _generate_model, DataHandler, ResNet, UNet3D, ResNetLightning, VerSeDataModule, read_config]
