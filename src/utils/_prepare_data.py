@@ -82,9 +82,9 @@ class DataHandler:
 
             if file.get_parent() == "rawdata" and split_filter:
                 raw_file = file
-            elif (file.do_filter("seg", "subreg") or file.do_filter("seg", "vertsac")) and file.do_filter("format", "msk") and split_filter:
+            elif file.do_filter("seg", "vertsac") and file.do_filter("format", "msk") and split_filter:
                 seg_file = file
-            if file.do_filter("format", "ctd") and (file.do_filter("seg", "subreg") or file.do_filter("seg", "vertsac")) and split_filter:
+            if file.do_filter("format", "ctd") and file.do_filter("seg", "vertsac") and split_filter:
                 ctd_file = file
 
         assert(raw_file != None)
@@ -119,9 +119,9 @@ class DataHandler:
 
             if file.get_parent() == "rawdata" and file.do_filter("ce", ce):
                 raw_file = file
-            elif file.do_filter("seg", "subreg") and file.do_filter("format", "msk") and file.do_filter("ce", ce):
+            elif file.do_filter("seg", "vertsac") and file.do_filter("format", "msk") and file.do_filter("ce", ce):
                 seg_file = file
-            if file.do_filter("format", "ctd") and file.do_filter("seg", "subreg") and file.do_filter("ce", ce):
+            if file.do_filter("format", "ctd") and file.do_filter("seg", "vertsac") and file.do_filter("ce", ce):
                 ctd_file = file
 
         assert(raw_file != None)
@@ -184,7 +184,7 @@ class DataHandler:
         return ap_slice, lr_slice, is_slice
 
 
-    def _get_cutout(self, record, return_seg, max_shape, save_dir, skip_existing = True):
+    def _get_cutout(self, record, return_seg, max_shape, save_dir = "/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data", skip_existing = True):
         """
         Args:
             BIDS Family, return_seg (instead of ct), max_shape
@@ -231,8 +231,10 @@ class DataHandler:
 
         seg_arr = seg_nii.get_array()
 
-        ap_slice, lr_slice, is_slice = self._compute_slice(seg_arr = seg_arr, ctd = ctd, max_shape = max_shape)
-
+        try:
+            ap_slice, lr_slice, is_slice = self._compute_slice(seg_arr = seg_arr, ctd = ctd, max_shape = max_shape)
+        except Exception:
+            raise Exception("")
         
         seg_cutout = seg_arr[ap_slice, is_slice, lr_slice]
         #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
@@ -256,7 +258,7 @@ class DataHandler:
     def _prepare_cutouts(self, save_dir, max_shape=(128, 86, 136), n_jobs = 8):
 
         assert(save_dir != None)
-        total_records = self.tri_records 
+        total_records = self.verse_records + self.tri_records
         seg_fun = partial(self._get_cutout, return_seg = False, max_shape = max_shape, save_dir = save_dir, skip_existing = True)
         res = pqdm(total_records, seg_fun, n_jobs = n_jobs)
         for r in res:
@@ -366,14 +368,14 @@ def read_config(config_file):
 def main():
     WORKING_DIR = "/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/"
     logging.basicConfig(filename=WORKING_DIR + 'data/prepare_data.log', encoding='utf-8', level=logging.DEBUG)
-    dataset = [WORKING_DIR  + 'data/dataset-verse19',  WORKING_DIR + 'data/dataset-verse20', WORKING_DIR + 'data/dataset-tri']
+    dataset = [WORKING_DIR  + 'data/dataset-verse19',  WORKING_DIR + 'data/dataset-verse20', WORKING_DIR + "data/dataset-tri"]
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg"]
     master_list = WORKING_DIR + 'data/Castellvi_list.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
     sample = processor.tri_records[1]
-    processor._get_cutout(sample,return_seg = False, max_shape=(128, 86, 136),save_dir = WORKING_DIR + "data", skip_existing=True)
-    #processor._prepare_cutouts(save_dir = WORKING_DIR + "data")
+    #processor._get_cutout(sample,return_seg = False, max_shape=(128, 86, 136),save_dir = WORKING_DIR + "data", skip_existing=True)
+    processor._prepare_cutouts(save_dir = WORKING_DIR + "data")
     
     
 if __name__ == "__main__":
