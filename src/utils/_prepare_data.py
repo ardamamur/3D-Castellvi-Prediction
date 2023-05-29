@@ -20,130 +20,125 @@ class DataHandler:
         Initialize a new object of BIDS toolbox for the given dataset ( VerSe19 and VerSe20)
         """
         self.bids = BIDS_Global_info(dataset, data_types, additional_key = image_types, verbose=True)
-        self.master_df = pd.read_excel(master_list)
-        self.subject_list = self.master_df['Full_Id'].values.tolist()
+        self.verse_records = []
+        self.tri_records = []
+
+        master_df = pd.read_excel(master_list)
+        self.master_records = master_df.dropna(subset = "Full_Id").to_dict('records')
+
+
+        for record in self.master_records:
+            sub, dataset, split, ce = self._split_full_id(record["Full_Id"])
+
+            castellvi = record["Castellvi"]         #String 
+            last_l = record["Last_L"]               #L4-L6
+            side = record["2a/3a Side"]             #L/R or NaN
+            if dataset == "verse":
+                verse_record = self._create_verse_record(sub, split, castellvi, last_l, side)
+                self.verse_records.append(verse_record)
+            elif dataset == "tri":
+                tri_record = self._create_tri_record(sub, ce, castellvi, last_l, side)
+                self.tri_records.append(tri_record)
+
     
-    def _get_len(self):
-        """
-        Returns:
-            length of the dataset
-        """
-        return len(self.bids.subjects) 
-        
-    def _get_families(self):
-        """
-        IDS splits data samples roughly into:
-            - Subject: different patients
-            - Sessions: one patient can have multiple scans
 
-        You use enumerate_subjects to iterate over different, unique subjects.
-        Then, you can use queries to apply various filters. If you use flatten=True, 
-        that means you filter inividual files, and not a group/family of files.
-        
-        Everyone needs a family! 
-        Files that are generated from others should belong to a family. 
-        We automatically find related files and cluster them into a dictionary.
-
-        Returns:
-            Length of the families in the dataset
-        """
-
-        bids_families = []
-        fam_count = {}
-        for subject_name, subject_container in self.bids.enumerate_subjects(sort = True):
-
-            query = subject_container.new_query(flatten=False) #<- flatten=False means we search for family
-            #For the project, we need a ct scan, a segmentation and the centroid data. So let's filter for that
-            query.filter('format','ct')
-            query.filter('seg','vert')
-
-            i = 0
-
-            #now we can loop over families and gather some information
-            for bids_family in query.loop_dict(sort=True):
-                bids_families.append(bids_family)
-                i = i + 1
-
-            
-            fam_count[query.subject.name] = i
-
-        print("Total families in the dataset:", len(bids_families))
-        return fam_count
-    
-    def _get_subjects_with_multiple_families(self,families):
-        """
-        Args:
-            Dict : subjects as keys and related family numbers as values
-        Return:
-            List of subjects that has multiple families
-        """
-        keys_with_value_greater_than_1 = []
-        for key, value in families.items():
-            if value > 1:
-                keys_with_value_greater_than_1.append(key)
-
-        print("Subjects with multiple families:", keys_with_value_greater_than_1)
-        return keys_with_value_greater_than_1
-     
-    def _get_subject_family(self, subject:str):
-        """
-        Return:
-            First family of the subject
-    
-        TODO : Make enable for all families that subjects have
-        """
-        subject_container = self.bids.subjects[subject]
-        query = subject_container.new_query(flatten = False)
-        query.filter('format','ct')
-        query.filter('seg','vert')
-        family = next(query.loop_dict())
-        return family
-
-            
-    def _get_missing_subjects(self):
-        print("Number of missing subjects: {}".format(self.master_df["Full_Id"].isnull().sum()))
-        null_indexes = self.master_df.index[self.master_df["Full_Id"].isnull()].tolist()
-        return null_indexes
-
-    def _get_missing_sacrum(self):
-        print("Number of missing sacrum_seg: {}".format(self.master_df["Sacrum Seg"].isnull().sum()))
-        null_indexes = self.master_df.index[self.master_df["Sacrum Seg"].isnull()].tolist()
-        return null_indexes
-
-    def _drop_missing_entries(self)->None:
-        """
-        Args:
-            pd.DataFrame of ground truth labels ( master file)
-        Returns:
-            pd.DataFrame without missin entries.
-        """
-        if self._get_missing_subjects() == self._get_missing_sacrum():
-            # Cause there is clearly a castellvi anomaly there, 
-            # but the S1 is not fully visible in the scan 
-            print("All missing subjects has no information about sacrum segmentation")
-            self.master_df = self.master_df.dropna(subset=['Full_Id'])
-            self.subject_list = self.master_df['Full_Id'].values.tolist()
+    def _split_full_id(self, full_id: str):
+        decomposed_id = full_id.split("_")
+        sub = decomposed_id[0]
+        if sub[:4] == "sub-":
+            #clean Full_Id prefixes
+            sub = sub[4:]
+        if sub[:5] == "verse":
+            dataset = "verse"
+            split = None if len(decomposed_id) == 1 else decomposed_id[1][6:]
+            ce = None
+        elif sub[:3] == "tri":
+            dataset = "tri"
+            split = None
+            ce = None if len(decomposed_id) == 1 else decomposed_id[1][3:]
         else:
-            print('missing subjects: ' , self._get_missing_subjects())
-            raise Exception('There are some mising subjects that has sacrum segmentation. Check them again')
+            raise Exception("Unrecognised dataset {}".format(full_id))
+        
+        return sub, dataset, split, ce
+
+    def _create_verse_record(self, sub, split, castellvi, last_l, side):
+        record = {}
+
+        record["dataset"] = "verse"
+
+        record["subject"] = sub
+        record["split"] = split
+
+        raw_file = None
+        seg_file = None
+        ctd_file = None
+
+        subject_container = self.bids.subjects[sub]
+        query = subject_container.new_query(flatten = True)
+        
+        for file in query.loop_list():
+
+            split_filter = True if split == None else file.do_filter("split", split)
+
+            if file.get_parent() == "rawdata" and split_filter:
+                raw_file = file
+            elif file.do_filter("seg", "vertsac") and file.do_filter("format", "msk") and split_filter:
+                seg_file = file
+            if file.do_filter("format", "ctd") and file.do_filter("seg", "vertsac") and split_filter:
+                ctd_file = file
+
+        assert(raw_file != None)
+        assert(seg_file != None)
+        assert(ctd_file != None)
+
+        record["raw_file"] = raw_file
+        record["seg_file"] = seg_file
+        record["ctd_file"] = ctd_file
+
+        record["castellvi"] = castellvi
+        record["last_l"] = last_l
+        record["side"] = side
+
+        return record
+
+    def _create_tri_record(self, sub, ce, castellvi, last_l, side):
+        record = {}
+        record["dataset"] = "tri"
+
+        record["subject"] = sub
+        record["ce"] = ce
+
+        raw_file = None
+        seg_file = None
+        ctd_file = None
+
+        subject_container = self.bids.subjects[sub]
+        query = subject_container.new_query(flatten = True)
+
+        for file in query.loop_list():
+
+            if file.get_parent() == "rawdata" and file.do_filter("ce", ce):
+                raw_file = file
+            elif file.do_filter("seg", "vertsac") and file.do_filter("format", "msk") and file.do_filter("ce", ce):
+                seg_file = file
+            if file.do_filter("format", "ctd") and file.do_filter("seg", "vertsac") and file.do_filter("ce", ce):
+                ctd_file = file
+
+        assert(raw_file != None)
+        assert(seg_file != None)
+        assert(ctd_file != None)
+
+        record["raw_file"] = raw_file
+        record["seg_file"] = seg_file
+        record["ctd_file"] = ctd_file
 
 
-    def _get_roi_object_idx(self, roi_parts:list):
-        """
-        Args:
-            desired vertebra parts in a list
-        Return:
-            List of ids
-        """
-        v_idx2name = {
-            1: "C1",     2: "C2",     3: "C3",     4: "C4",     5: "C5",     6: "C6",     7: "C7", 
-            8: "T1",     9: "T2",    10: "T3",    11: "T4",    12: "T5",    13: "T6",    14: "T7",    15: "T8",    16: "T9",    17: "T10",   18: "T11",   19: "T12", 28: "T13",
-            20: "L1",    21: "L2",    22: "L3",    23: "L4",    24: "L5",    25: "L6",    
-            26: "S1",    29: "S2",    30: "S3",    31: "S4",    32: "S5",    33: "S6",
-            27: "Cocc"
-        }
-        idx = [key for key, value in v_idx2name.items() if value in roi_parts]
-        return sorted(idx)
+        record["castellvi"] = castellvi
+        record["last_l"] = last_l
+        record["side"] = side
+
+        return record
+        
     
     def _compute_slice(self, seg_arr:np.ndarray, ctd:BIDS.Centroids, max_shape:tuple | None):
         """
@@ -189,7 +184,7 @@ class DataHandler:
         return ap_slice, lr_slice, is_slice
 
 
-    def _get_cutout(self, family:BIDS_Family, return_seg=False, max_shape=(128, 86, 136), save_dir = '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data'):
+    def _get_cutout(self, record, return_seg, max_shape, save_dir = "/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data", skip_existing = True):
         """
         Args:
             BIDS Family, return_seg (instead of ct), max_shape
@@ -203,103 +198,75 @@ class DataHandler:
         dir_path = save_dir + "/cutouts/shape_{}_{}_{}".format(max_shape[0], max_shape[1], max_shape[2])
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
-        filepath = save_dir + "/cutouts/shape_{}_{}_{}/{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], family.get_identifier(), "seg" if return_seg else "ct")
-        
-        if os.path.isfile(filepath + ".npy"):
-            logging.info("Read saved file {} from disk".format(filepath))
-            return np.load(filepath + ".npy")
+        filepath_seg = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")
+        filepath_ct = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
 
-        seg_nii = family["msk_seg-vertsac"][0].open_nii()
-        ctd = family["ctd_seg-vertsac"][0].open_cdt()
+        if os.path.isfile(filepath_seg + ".npy") and os.path.isfile(filepath_ct + ".npy") and skip_existing:
+            logging.info("Skipping existing cutouts of subject {}".format(record["subject"]))
+            if return_seg:
+                return(np.load(file=filepath_seg + ".npy"))
+            else:
+                return(np.load(file=filepath_ct + ".npy"))
+
+        seg_nii = record["seg_file"].open_nii()
+        ctd = record["ctd_file"].open_cdt()
         ctd.zoom = seg_nii.zoom
 
-        if not return_seg:
-            ct_nii = family["ct"][0].open_nii()
+        
+        ct_nii = record["raw_file"].open_nii()
 
         seg_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
         ctd.reorient_(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
 
-        if not return_seg:
-            ct_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
-
         
-        #naive pre-cropping around centroid to decrease size that needs to be resampled
-        # lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
-        # assert(lowest_L_idx != None)
-        # lowest_L_ctd = ctd[lowest_L_idx]
-        
-        # #save 10 cm in each direction from centroid, accounting for zoom
-        # slices = [slice(int((lowest_L_ctd[i] - 100)/seg_nii.zoom[i]) , int((lowest_L_ctd[i] + 100)/seg_nii.zoom[i])) for i in range(3)]
-        # seg_nii.set_array_(seg_nii.get_array()[slices[0], slices[1], slices[2]])
+        ct_nii.reorient_(axcodes_to=('P', 'I', 'R'), verbose = False)
 
-        # if not return_seg:
-        #     ct_nii.set_array(ct_nii.get_array()[slices[0], slices[1], slices[2]])
 
         seg_nii.rescale_(voxel_spacing = (1,1,1))
         ctd.rescale_(voxel_spacing = (1,1,1))
 
-        if not return_seg:
-            ct_nii.rescale_(voxel_spacing = (1,1,1))
+    
+        ct_nii.rescale_(voxel_spacing = (1,1,1))
 
 
         seg_arr = seg_nii.get_array()
 
-        ap_slice, lr_slice, is_slice = self._compute_slice(seg_arr = seg_arr, ctd = ctd, max_shape = max_shape)
-
+        try:
+            ap_slice, lr_slice, is_slice = self._compute_slice(seg_arr = seg_arr, ctd = ctd, max_shape = max_shape)
+        except Exception:
+            raise Exception("")
+        
+        seg_cutout = seg_arr[ap_slice, is_slice, lr_slice]
+        #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
+        seg_cutout = np.pad(seg_cutout, [(0, max_shape[i] - seg_cutout.shape[i]) for i in range(len(seg_cutout.shape))],"constant")
+        np.save(filepath_seg, arr = seg_cutout)
+        logging.info("Saved new seg file {}".format(filepath_seg))
+            
+        
+        ct_arr = ct_nii.get_array()
+        ct_cutout = ct_arr[ap_slice, is_slice, lr_slice]
+        #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
+        ct_cutout = np.pad(ct_cutout, [(0, max_shape[i] - ct_cutout.shape[i]) for i in range(len(ct_cutout.shape))],"constant")
+        np.save(filepath_ct, arr = ct_cutout)
+        logging.info("Saved new CT file {}".format(filepath_ct))
+        
         if return_seg:
-            seg_cutout = seg_arr[ap_slice, is_slice, lr_slice]
-            #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
-            seg_cutout = np.pad(seg_cutout, [(0, max_shape[i] - seg_cutout.shape[i]) for i in range(len(seg_cutout.shape))],"constant")
-            np.save(filepath, arr = seg_cutout)
-            logging.info("Saved new seg file {}".format(filepath))
-            return seg_cutout
+            return(np.load(file=filepath_seg + ".npy"))
         else:
-            ct_arr = ct_nii.get_array()
-            ct_cutout = ct_arr[ap_slice, is_slice, lr_slice]
-            #We still need to pad in case the slice exceeded the image bounds i.e. no image data is available for the entire range
-            ct_cutout = np.pad(ct_cutout, [(0, max_shape[i] - ct_cutout.shape[i]) for i in range(len(ct_cutout.shape))],"constant")
-            np.save(filepath, arr = ct_cutout)
-            logging.info("Saved new CT file {}".format(filepath))
-            return ct_cutout
+            return(np.load(file=filepath_ct + ".npy"))
 
-    def _prepare_cutouts(self, multi_family_subjects, save_dir = '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data', max_shape=(128, 86, 136), n_jobs = 8):
+    def _prepare_cutouts(self, save_dir, max_shape=(128, 86, 136), n_jobs = 8):
 
-        args = []
         assert(save_dir != None)
+        total_records = self.verse_records + self.tri_records
+        seg_fun = partial(self._get_cutout, return_seg = False, max_shape = max_shape, save_dir = save_dir, skip_existing = True)
+        res = pqdm(total_records, seg_fun, n_jobs = n_jobs)
+        for r in res:
+            print(r)
+        
 
-        for subject in tqdm(self.bids.subjects):
-            if not self._is_multi_family(subject, families=multi_family_subjects):
-                sub_name, exists = self._get_subject_name(subject=subject)
-                if exists:
-                    family = self._get_subject_family(subject=subject)
-                    args.append(family)
-        
-        seg_fun = partial(self._get_cutout, return_seg = True, max_shape = max_shape, save_dir = save_dir)
-        ct_fun = partial(self._get_cutout, return_seg = False, max_shape = max_shape, save_dir = save_dir)
-        
-        seg_cutouts = pqdm(args, seg_fun, n_jobs = n_jobs)
-        ct_cutouts = pqdm(args, ct_fun, n_jobs = n_jobs)
-        for cutout in seg_cutouts:
-            assert(cutout.shape == max_shape)
-        for cutout in ct_cutouts:
-            assert(cutout.shape == max_shape)
-    
-    def _get_subject_name(self, subject:str):
-        subject_name = None
-        for sub in self.subject_list:
-            if subject in sub:
-                subject_name = sub
-                return subject_name, True
-        if subject_name == None :
-            return subject_name, False
-    
-    def _is_multi_family(self, subject, families):
-        if subject in families:
-            return True
-        else:
-            return False
-        
     def _max_shape_job(self, family):
+        #TODO: refactor for use with family
         """
         Args:
             list of families to handle.
@@ -336,6 +303,7 @@ class DataHandler:
         
 
     def _get_max_shape(self, multi_family_subjects, n_jobs = 8):
+        #TODO: refactor for use with family
         """
         Args:
             subject name
@@ -398,30 +366,17 @@ def read_config(config_file):
     return config
 
 def main():
-    #params = read_config('/u/home/mamar/3D-Castellvi-Prediction/settings.yaml')
-    #print(params.n_epochs*2)
-    WORKING_DIR = "/data1/practical-sose23/"
-    logging.basicConfig(filename=WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/data/prepare_data.log', encoding='utf-8', level=logging.DEBUG)
-    dataset = [WORKING_DIR  + 'dataset-verse19',  WORKING_DIR + 'dataset-verse20']
+    WORKING_DIR = "/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/"
+    logging.basicConfig(filename=WORKING_DIR + 'data/prepare_data.log', encoding='utf-8', level=logging.DEBUG)
+    dataset = [WORKING_DIR  + 'data/dataset-verse19',  WORKING_DIR + 'data/dataset-verse20', WORKING_DIR + "data/dataset-tri"]
     data_types = ['rawdata',"derivatives"]
-    image_types = ["ct", "subreg", "cortex"]
-    master_list = WORKING_DIR + 'castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist.xlsx'
+    image_types = ["ct", "subreg"]
+    master_list = WORKING_DIR + 'data/Castellvi_list.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    processor._drop_missing_entries()
-    families = processor._get_families()
-    # print(families)
-    multi_family_subjects = processor._get_subjects_with_multiple_families(families)
-    processor._prepare_cutouts(multi_family_subjects=multi_family_subjects, max_shape=(128,86,136), n_jobs = 8, save_dir = WORKING_DIR + "castellvi/3D-Castellvi-Prediction/data")
-
-    bids_subjects, master_subjects = processor._get_subject_samples()
-    bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
-    subjects = (bids_families, master_subjects)
-    family = subjects[0][0]
-    img = processor._get_cutout(family = family, return_seg = False, max_shape = (128,86,136), save_dir = WORKING_DIR + "castellvi/3D-Castellvi-Prediction/data")
-    print(type(img))
-    return
-
+    sample = processor.tri_records[1]
+    #processor._get_cutout(sample,return_seg = False, max_shape=(128, 86, 136),save_dir = WORKING_DIR + "data", skip_existing=True)
+    processor._prepare_cutouts(save_dir = WORKING_DIR + "data")
     
     
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+     main()
