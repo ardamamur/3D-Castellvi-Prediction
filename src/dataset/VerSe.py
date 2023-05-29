@@ -24,8 +24,6 @@ class VerSe(Dataset):
         self.use_seg = use_seg
         self.training = training
         self.binary = use_binary_classes
-        #self.bids_subjects = subjects[0]
-        #self.master_subjects = subjects[1]
         self.categories = castellvi_classes
         self.castellvi_dict = {category: i for i, category in enumerate(self.categories)}
         self.transformations = self.get_transformations()
