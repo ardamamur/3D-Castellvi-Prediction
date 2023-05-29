@@ -41,14 +41,10 @@ def main(params):
                             image_types=params.img_types
                         )
 
-    processor._drop_missing_entries()
-    bids_subjects, master_subjects = processor._get_subject_samples()
-    bids_families = [processor._get_subject_family(subject) for subject in bids_subjects]
-    subjects = (bids_families, master_subjects)
+    
 
     verse_data_module = VerSeDataModule(processor,
-                                        subjects=subjects,
-                                        master_list=params.master_list_v2,
+                                        master_list=params.master_list,
                                         castellvi_classes=params.castellvi_classes,
                                         pad_size=(128,86,136),
                                         use_seg=params.use_seg,
