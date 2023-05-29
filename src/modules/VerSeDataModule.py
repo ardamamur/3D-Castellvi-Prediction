@@ -22,8 +22,6 @@ class VerSeDataModule(pl.LightningDataModule):
         self.train_val_split = train_val_split
         self.master_df = pd.read_excel(master_list)
 
-
-
     def prepare_data(self):
         pass
 

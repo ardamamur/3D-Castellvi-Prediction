@@ -10,7 +10,7 @@ from utils._get_model import *
 from utils._prepare_data import read_config
 from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
-from modules.DenseNetModule import *
+from modules.DenseNetModule import DenseNet
 
 
 def model_dict():
@@ -35,7 +35,7 @@ def main(params):
     torch.manual_seed(params.manual_seed)
     # Initialize your data module
     print(params)
-    processor = DataHandler(master_list=params.master_list,
+    processor = DataHandler(master_list=params.master_list_v2,
                             dataset=params.data_root,
                             data_types=params.data_types,
                             image_types=params.img_types
@@ -44,7 +44,7 @@ def main(params):
     
 
     verse_data_module = VerSeDataModule(processor,
-                                        master_list=params.master_list,
+                                        master_list=params.master_list_v2,
                                         castellvi_classes=params.castellvi_classes,
                                         pad_size=(128,86,136),
                                         use_seg=params.use_seg,

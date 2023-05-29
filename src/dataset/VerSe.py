@@ -31,25 +31,32 @@ class VerSe(Dataset):
 
 
     def __len__(self):
-        return len(self.processor.verse_records)
+        return len(self.processor.verse_records)*2
 
     def __getitem__(self, index):
+        record_index = index // 2  # Each record contributes two data points: original and flipped
+        flip = index % 2  # We'll use this to determine if we should flip the image
 
-        
-        record = self.processor.verse_records[index]
+        record = self.processor.verse_records[record_index]
+        print('flip:', flip)
+        print('record:', record)
         img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size)
         img = img[np.newaxis, ...]
+
+        if flip:
+            img = np.flip(img, axis=2)  # Assuming flipping is done horizontally
 
         if self.binary:
             labels = self._get_binary_label(record)
         else:
-            labels = self._get_castellvi_side_labels(record)
+            labels = self._get_castellvi_right_side_label(record, flip=flip)
 
         if self.training:
             inputs = self.transformations(img) 
         else:
             inputs = self.test_transformations(img)
 
+        print('label:', labels)
         return {"target": inputs, "class": labels}
 
 
@@ -68,8 +75,42 @@ class VerSe(Dataset):
         return one_hot
 
 
+    def _get_castellvi_right_side_label(self, record, flip):
+
+        castellvi = str(record["castellvi"])
+        no_anomaly = ['0', '1a', '1b']
+        side = str(record['side'])
+        if flip:
+            if side is not None:
+                if side=='R':
+                    side = 'L'
+                else:
+                    side = 'R'
+        # Cause of labels out of range error we mapped the class 2 -> 1 and 3 -> 2
+        if castellvi in no_anomaly:
+            return 0
+        else:
+            if castellvi=='2b':
+                return 1
+            elif castellvi=='3b':
+                return 2
+
+            elif castellvi=='2a':
+                if side == 'R':
+                    return 1
+                else:
+                    return 0
+            # 3B
+            else:
+                if side=='R':
+                    return 2
+                else:
+                    return 0
+
     def _get_castellvi_side_labels(self, record):
         castellvi = str(record["castellvi"])
+
+
         # side = str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Side'].values[0])
         
         # Split the string into class and subclass (if it exists)
@@ -97,7 +138,6 @@ class VerSe(Dataset):
     def get_transformations(self):
 
         transformations = montransforms.Compose([montransforms.CenterSpatialCrop(roi_size=[128,86,136]),
-                                                montransforms.RandFlip(prob=0.5, spatial_axis=2), # flips along width for a horizontal flip
                                                 montransforms.RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
                                                 ])
         return transformations

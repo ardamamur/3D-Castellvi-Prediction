@@ -37,5 +37,5 @@ gpu_id: '3'
 n_devices: 1
 model: 'densenet'
 manual_seed: 1
-num_classes : 4
+num_classes : 3
 port : 6974

@@ -275,13 +275,23 @@ class DenseNet169(DenseNet):
         super().__init__(init_features=init_features, out_channels1=out_channels1, out_channels2=out_channels2 , growth_rate=growth_rate, block_config=block_config, **kwargs)
 
 
-Densenet = DenseNet
-Densenet169 = densenet169 = DenseNet169
+
+
+
+def monai_dense169_3d_2mlp(data_channel, num_classes, pretrained):
+    Densenet = DenseNet
+    Densenet169 = densenet169 = DenseNet169
+    print('num_class:', num_classes)
+    network = DenseNet169(in_channels=1, pretrained=False, spatial_dims=3, out_channels1=num_classes, out_channels2=num_classes)
+    return network
 
 
 def monai_dense169_3d(data_channel, num_classes, pretrained):
-    print('num_class:', num_classes)
-    network = DenseNet169(in_channels=1, pretrained=False, spatial_dims=3, out_channels1=num_classes, out_channels2=num_classes)
+    from monai.networks.nets import DenseNet169
+    # pretrained=False because not supported for 3D
+    if pretrained:
+        warnings.warn("monia_densenet_3d doesnt support pretrained, is set to False", UserWarning)
+    network = DenseNet169(in_channels=1, pretrained=False, spatial_dims=3, out_channels=num_classes)
     return network
 
 
