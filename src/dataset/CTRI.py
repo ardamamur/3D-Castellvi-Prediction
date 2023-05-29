@@ -13,8 +13,8 @@ from utils._prepare_data import DataHandler
 from monai.transforms import Compose, Rotate, Flip, Pad
 
 
-class VerSe(Dataset):
-    def __init__(self, processor:DataHandler, castellvi_classes:list, pad_size=(128,86,136), use_seg=False, use_binary_classes=True, training=True) -> None:
+class CTRI(Dataset):
+    def __init__(self, processor:DataHandler, subjects, castellvi_classes:list, pad_size=(128,86,136), use_seg=False, use_binary_classes=True, training=True) -> None:
         """
         Initialize an object of 
         """
@@ -33,12 +33,12 @@ class VerSe(Dataset):
 
 
     def __len__(self):
-        return len(self.processor.verse_records)
+        return len(self.processor.tri_records)
 
     def __getitem__(self, index):
 
         
-        record = self.processor.verse_records[index]
+        record = self.processor.tri_records[index]
         img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size)
         img = img[np.newaxis, ...]
 
@@ -71,6 +71,7 @@ class VerSe(Dataset):
 
 
     def _get_castellvi_side_labels(self, record):
+        #TODO: Handle missing sides
         castellvi = str(record["castellvi"])
         # side = str(self.processor.master_df.loc[self.processor.master_df['Full_Id'] == subject]['Side'].values[0])
         
@@ -111,6 +112,3 @@ class VerSe(Dataset):
                                                 ])
         return transformations
     
-
-        
-

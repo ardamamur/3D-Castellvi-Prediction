@@ -184,7 +184,7 @@ class DataHandler:
         return ap_slice, lr_slice, is_slice
 
 
-    def _get_cutout(self, record, max_shape, save_dir, skip_existing = True):
+    def _get_cutout(self, record, return_seg, max_shape, save_dir, skip_existing = True):
         """
         Args:
             BIDS Family, return_seg (instead of ct), max_shape
@@ -203,8 +203,10 @@ class DataHandler:
 
         if os.path.isfile(filepath_seg + ".npy") and os.path.isfile(filepath_ct + ".npy") and skip_existing:
             logging.info("Skipping existing cutouts of subject {}".format(record["subject"]))
-            return filepath_seg, filepath_ct
-
+            if return_seg:
+                return(np.load(file=filepath_seg + ".npy"))
+            else:
+                return(np.load(file=filepath_ct + ".npy"))
 
         seg_nii = record["seg_file"].open_nii()
         ctd = record["ctd_file"].open_cdt()
@@ -246,19 +248,23 @@ class DataHandler:
         np.save(filepath_ct, arr = ct_cutout)
         logging.info("Saved new CT file {}".format(filepath_ct))
         
-        return filepath_seg, filepath_ct
+        if return_seg:
+            return(np.load(file=filepath_seg + ".npy"))
+        else:
+            return(np.load(file=filepath_ct + ".npy"))
 
     def _prepare_cutouts(self, save_dir, max_shape=(128, 86, 136), n_jobs = 8):
 
         assert(save_dir != None)
         total_records = self.tri_records 
-        seg_fun = partial(self._get_cutout, max_shape = max_shape, save_dir = save_dir, skip_existing = True)
+        seg_fun = partial(self._get_cutout, return_seg = False, max_shape = max_shape, save_dir = save_dir, skip_existing = True)
         res = pqdm(total_records, seg_fun, n_jobs = n_jobs)
         for r in res:
             print(r)
         
 
     def _max_shape_job(self, family):
+        #TODO: refactor for use with family
         """
         Args:
             list of families to handle.
@@ -295,6 +301,7 @@ class DataHandler:
         
 
     def _get_max_shape(self, multi_family_subjects, n_jobs = 8):
+        #TODO: refactor for use with family
         """
         Args:
             subject name
@@ -364,8 +371,8 @@ def main():
     image_types = ["ct", "subreg"]
     master_list = WORKING_DIR + 'data/Castellvi_list.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    sample = processor.tri_records[0]
-    processor._get_cutout(sample,max_shape=(128, 86, 136),save_dir = WORKING_DIR + "data", skip_existing=True)
+    sample = processor.tri_records[1]
+    processor._get_cutout(sample,return_seg = False, max_shape=(128, 86, 136),save_dir = WORKING_DIR + "data", skip_existing=True)
     #processor._prepare_cutouts(save_dir = WORKING_DIR + "data")
     
     
