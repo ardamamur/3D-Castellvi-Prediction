@@ -70,7 +70,7 @@ class VerSeDataModule(pl.LightningDataModule):
         dataset = VerSe(self.processor, self.castellvi_classes, self.pad_size, self.use_seg, self.use_binary_classes, training=True)
         train_dataset, _ = random_split(dataset, self.train_val_split, generator = torch.Generator().manual_seed(42))
 
-        sampler = self._getsampler(train_dataset)
+        sampler = self._get_sampler(train_dataset)
         return DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, sampler = sampler)
 
     def val_dataloader(self):
