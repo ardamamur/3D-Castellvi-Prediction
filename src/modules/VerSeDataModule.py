@@ -48,18 +48,22 @@ class VerSeDataModule(pl.LightningDataModule):
         for index in range(len(dataset)):
             true_labels.append(dataset.__getitem__(index)["class"])
 
+
         true_labels = torch.tensor(true_labels)
 
         # Count the occurrences of each true label
         label_counts = torch.bincount(true_labels)
 
         # Compute the inverse of the label counts to get the weights
-        weights = 1.0 / label_counts.float()
+        per_label_weights = 1.0 / label_counts.float()
 
-        # Normalize the weights to sum up to the number of classes
-        weights = weights / weights.sum() * len(label_counts)
+        weights = torch.zeros(size = true_labels.size())
+
+        for i in range(len(label_counts)):
+            weights[true_labels == i] = per_label_weights[i] / len(label_counts)
 
         weights = weights.tolist()
+    
 
         sampler = torch.utils.data.WeightedRandomSampler(weights, len(dataset))
         return sampler
@@ -71,7 +75,7 @@ class VerSeDataModule(pl.LightningDataModule):
         train_dataset, _ = random_split(dataset, self.train_val_split, generator = torch.Generator().manual_seed(42))
 
         sampler = self._get_sampler(train_dataset)
-        return DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, sampler = sampler)
+        return DataLoader(train_dataset, batch_size=self.batch_size, sampler = sampler)
 
     def val_dataloader(self):
         #TODO: Does weighted sampling make sense for validation too?
