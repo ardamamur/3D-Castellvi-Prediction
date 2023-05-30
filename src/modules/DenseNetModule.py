@@ -8,6 +8,7 @@ from torch import nn
 import pytorch_lightning as pl
 import torchmetrics.functional as mF
 from models.DenseNet3D import monai_dense169_3d
+from utils._get_model import _get_weights
 from torch.optim import lr_scheduler
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -32,8 +33,17 @@ class DenseNet(pl.LightningModule):
         self.data_channel = data_channel
         self.network_id = opt.model
         self.network = self.networkX(self.network_id, pretrained=False)
-        self.cross_entropy = nn.CrossEntropyLoss(reduction="mean")
+        
         self.softmax = nn.Softmax(dim=1)
+
+        # TODO : Update masterlist parameter
+        if opt.right_side:
+            weights = _get_weights(opt.master_list_v2 , rigth_side=True)
+            weights = torch.tensor(weights).cuda()
+            self.cross_entropy = nn.CrossEntropyLoss(weights=weights, reduction="mean")
+        else:
+            self.cross_entropy = nn.CrossEntropyLoss(reduction="mean")
+
 
         self.l2_reg_w = 0.0
         print(f"{self._get_name()} loaded with {self.num_classes} classes, data_size {self.data_size} and {self.data_channel} channel")

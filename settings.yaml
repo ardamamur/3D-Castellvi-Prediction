@@ -21,13 +21,14 @@ castellvi_classes:
   - '4'
   - '0'
 use_seg: False
+right_side: True
 phase: 'train'
 scheduler : "ReduceLROnPlateau"
 optimizer : "AdamW"
 learning_rate: 0.001
 weight_decay: 0.0001
 total_iterations: 100
-batch_size: 8
+batch_size: 16
 save_intervals: 10
 n_epochs: 100
 resume_path: ''

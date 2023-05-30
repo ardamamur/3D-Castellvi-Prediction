@@ -4,70 +4,49 @@ import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
-from torch.utils.data import DataLoader
-from utils._prepare_data import DataHandler
-from utils._get_model import *
-from utils._prepare_data import read_config
+from tensorboard import program
+from utils._prepare_data import DataHandler, read_config
 from modules.ResNetModule import ResNetLightning
 from modules.VerSeDataModule import VerSeDataModule
 from modules.DenseNetModule import DenseNet
+from modules.DenseNetModule_v2 import DenseNetV2
 
+def get_model_class(model_name:str):
+    model_classes = {
+        "resnet": ResNetLightning,
+        "densenet": DenseNet,
+        "densenet_multi_mlp": DenseNetV2,
 
-def model_dict():
-    models = {
-        "densenet" : "base",
-        "resnet" : "base",
-        "unet" : "base",
-        "3dcnn" : "base",
-        "detr" : "transformer"
+        # Add other models here as they become available
     }
-    return models
-
-
-def is_base(model_name:str):
-    assert model_name in model_dict().keys()
-    if model_dict()[model_name] == "base":
-        return True
-    return False
-
+    return model_classes.get(model_name)
 
 def main(params):
     torch.manual_seed(params.manual_seed)
-    # Initialize your data module
     print(params)
+    
     processor = DataHandler(master_list=params.master_list_v2,
                             dataset=params.data_root,
                             data_types=params.data_types,
-                            image_types=params.img_types
-                        )
-
+                            image_types=params.img_types)
     
+    verse_data_module = VerSeDataModule(processor, opt=params, master_list=params.master_list_v2)
+    # Model selection
+    ModelClass = get_model_class(params.model)
+    if ModelClass is None:
+        raise Exception(f"Model '{params.model}' not implemented")
+    # Instantiate model
+    model = ModelClass(opt=params,
+                       num_classes=params.num_classes,
+                       data_size=(128,86,136),
+                       data_channel=1
+                       ).cuda()
 
-    verse_data_module = VerSeDataModule(processor,
-                                        master_list=params.master_list_v2,
-                                        castellvi_classes=params.castellvi_classes,
-                                        pad_size=(128,86,136),
-                                        use_seg=params.use_seg,
-                                        use_binary_classes=params.binary_classification, 
-                                        batch_size=params.batch_size,)
-
-    if params.model == 'resnet':
-        model = ResNetLightning(params)
-    elif params.model == "densenet":
-        model = DenseNet(opt=params, num_classes=params.num_classes, data_size=(128,86,136), data_channel=1)
-    else:
-        raise Exception('Not Implemented')
-
-    if is_base(params.model):
-        experiment = params.experiments + 'baseline_models/' + params.model
-    else:
-        raise Exception('Not Implemented')
-    
-
-    # Initialize Tensorboard
+    # TODO: Update experiment name
+    experiment = params.experiments + 'baseline_models/' + params.model
     logger = TensorBoardLogger(experiment, default_hp_metric=False)
-
-    # Define checkpoint callback
+    
+    # TODO: Add early stopping
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
         dirpath=f'{experiment}/best_models/version_{logger.version}',
@@ -76,7 +55,7 @@ def main(params):
         mode='min',
     )
 
-    # Initialize a trainer
+    # Create trainer
     trainer = pl.Trainer(accelerator="gpu",
                          max_epochs=params.n_epochs,
                          check_val_every_n_epoch=1,
@@ -84,21 +63,17 @@ def main(params):
                          log_every_n_steps=min(32, params.batch_size),
                          callbacks=[checkpoint_callback],
                          logger=logger)
-
+    # Start tensorboard
     try:
-        tb = start_tensorboard(params.port, experiment+"/lightning_logs") # starting a tensorboard where you can see the lightning logs
+        tb = start_tensorboard(params.port, experiment+"/lightning_logs") 
     except Exception as e:
         print(f"Could not start tensor board, got error {e}")
 
-
-    # Train the model ⚡
-    model = model.cuda()
+    # Start training
     torch.autograd.set_detect_anomaly(True)
-    # Pass your data module to the trainer
     trainer.fit(model, verse_data_module)
 
 def start_tensorboard(port, tracking_address: str):
-    from tensorboard import program
     tb = program.TensorBoard()
     tb.configure(argv=[None, "--logdir", tracking_address, "--port", str(port)])
     url = tb.launch()
@@ -114,7 +89,7 @@ if __name__ == '__main__':
     else:
         print('Running on CPU')
 
-    # Get Settings
+    # Get Settings from config file
     parser = argparse.ArgumentParser()
     parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
     args = parser.parse_args()
