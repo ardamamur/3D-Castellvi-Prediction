@@ -30,7 +30,7 @@ def main(params):
                             data_types=params.data_types,
                             image_types=params.img_types)
     
-    verse_data_module = VerSeDataModule(processor, opt=params, master_list=params.master_list_v2)
+    verse_data_module = VerSeDataModule(opt=params, processor=processor, master_list=params.master_list_v2)
     # Model selection
     ModelClass = get_model_class(params.model)
     if ModelClass is None:

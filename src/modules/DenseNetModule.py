@@ -40,7 +40,7 @@ class DenseNet(pl.LightningModule):
         if opt.right_side:
             weights = _get_weights(opt.master_list_v2 , rigth_side=True)
             weights = torch.tensor(weights).cuda()
-            self.cross_entropy = nn.CrossEntropyLoss(weights=weights, reduction="mean")
+            self.cross_entropy = nn.CrossEntropyLoss(weight=weights, reduction="mean")
         else:
             self.cross_entropy = nn.CrossEntropyLoss(reduction="mean")
 
