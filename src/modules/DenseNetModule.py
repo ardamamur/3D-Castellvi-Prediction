@@ -50,6 +50,7 @@ class DenseNet(pl.LightningModule):
     
     
     def forward(self, x):
+        x = x.float()
         logits = self.network(x)  # [-1, 1]
         return logits
     

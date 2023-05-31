@@ -12,6 +12,10 @@ class VerSeDataModule(pl.LightningDataModule):
         self.processor = processor
         self.batch_size = opt.batch_size
         self.master_df = pd.read_excel(master_list)
+        self.train_records = []
+        self.val_records = []
+        self.test_records = []
+        self.under_sample = opt.under_sample
 
     def prepare_data(self):
         pass
@@ -21,12 +25,18 @@ class VerSeDataModule(pl.LightningDataModule):
         records = self.processor.verse_records
         for rec in records:
             if rec['dataset_split'] == 'train':
+                if self.under_sample and (rec['castellvi'] == '1a' or rec['castellvi'] == '1b'):
+                    continue
                 self.train_records.append(rec)
             elif rec['dataset_split'] == 'val':
-                self.val_records.append(rec)
+                if self.under_sample and (rec['castellvi'] == '1a' or rec['castellvi'] == '1b'):
+                    continue
+                else:
+                    self.val_records.append(rec)
             else:
                 self.test_records.append(rec)
-
+        
+        print(self.train_records)
         if stage in {'fit', None}:
             self.train_dataset = VerSe(self.opt, self.processor, self.train_records, training=True)
             self.val_dataset = VerSe(self.opt, self.processor, self.val_records, training=False)

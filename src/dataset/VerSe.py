@@ -48,10 +48,11 @@ class VerSe(Dataset):
         Returns:
             int: length of the dataset
         '''
-        zero_labels = len([rec for rec in self.records if str(rec["castellvi"]) in self.no_side])
-        non_zero_labels = len(self.records) - zero_labels
+        
 
         if self.right_side:
+            zero_labels = len([rec for rec in self.records if str(rec["castellvi"]) in self.no_side])
+            non_zero_labels = len(self.records) - zero_labels
             return 2 * non_zero_labels + zero_labels
         else:
             return len(self.records)
@@ -94,13 +95,16 @@ class VerSe(Dataset):
         # Flip the image if we are using the right side and the index is odd. Because we are using the right side, we flip the image but if the label is 0, we don't flip it.
         flip = (index % 2 == 1) if self.right_side else False
 
-        if str(record["castellvi"]) not in self.no_side and flip: # Only flip if label is not 0
-            img = np.flip(img, axis=2) # Flip the image along the z-axis. In other words, flip the image horizontally.
+
+        if flip:
+            if str(record["castellvi"]) not in self.no_side: # Only flip if label is not 0
+                img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
+
 
         # Get the label
         labels = self._get_label_based_on_conditions(record, flip)
 
-        inputs = self.training_transformations(img) if self.training else img # Only apply transformations if training
+        inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
 
         return {"target": inputs, "class": labels}
 

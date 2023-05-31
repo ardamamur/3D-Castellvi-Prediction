@@ -278,7 +278,7 @@ class DenseNet169(DenseNet):
 
 
 
-def monai_dense169_3d_2mlp(data_channel, num_classes, pretrained):
+def monai_dense169_3d_multi_mlp(data_channel, num_classes, pretrained):
     Densenet = DenseNet
     Densenet169 = densenet169 = DenseNet169
     print('num_class:', num_classes)

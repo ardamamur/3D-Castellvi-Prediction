@@ -43,7 +43,7 @@ def main(params):
                        ).cuda()
 
     # TODO: Update experiment name
-    experiment = params.experiments + 'baseline_models/' + params.model
+    experiment = params.experiments + 'baseline_models/'  + params.model
     logger = TensorBoardLogger(experiment, default_hp_metric=False)
     
     # TODO: Add early stopping

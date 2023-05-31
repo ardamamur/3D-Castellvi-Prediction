@@ -21,7 +21,8 @@ castellvi_classes:
   - '4'
   - '0'
 use_seg: False
-right_side: True
+right_side: False
+under_sample: False
 phase: 'train'
 scheduler : "ReduceLROnPlateau"
 optimizer : "AdamW"
@@ -36,7 +37,7 @@ experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Predictio
 no_cuda: False
 gpu_id: '3'
 n_devices: 1
-model: 'densenet'
+model: 'densenet_multi_mlp'
 manual_seed: 1
-num_classes : 3
-port : 6974
+num_classes : 5
+port : 6484
