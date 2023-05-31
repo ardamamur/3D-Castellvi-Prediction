@@ -37,8 +37,8 @@ class DenseNet(pl.LightningModule):
         self.softmax = nn.Softmax(dim=1)
 
         # TODO : Update masterlist parameter
-        if opt.right_side:
-            weights = _get_weights(opt.master_list_v2 , rigth_side=True)
+        if opt.classification_type == "right_side":
+            weights = _get_weights(opt.master_list , rigth_side=True)
             weights = torch.tensor(weights).cuda()
             self.cross_entropy = nn.CrossEntropyLoss(weight=weights, reduction="mean")
         else:

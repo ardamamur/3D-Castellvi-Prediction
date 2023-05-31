@@ -29,55 +29,24 @@ class VerSe(Dataset):
         self.pad_size = (128,86,136) #pad_size
         self.use_seg = opt.use_seg #use_seg
         self.training = training
-        self.binary = opt.binary_classification
-        self.categories = opt.castellvi_classes
-        self.castellvi_dict = {category: i for i, category in enumerate(self.categories)} 
+        self.classification_type = opt.classification_type 
         self.transformations = self.get_transformations()
         self.test_transformations = self.get_test_transformations()
-        self.right_side = opt.right_side
-        if self.right_side:
-            self.no_side = ['0', '1a', '1b', '4']
         self.records = records
 
 
     def __len__(self):
         '''
-        Returns the length of the dataset. If we are using the right side, then we double the length of the dataset only for non-zero labels.
         Args:
             None
         Returns:
             int: length of the dataset
         '''
-        
-
-        if self.right_side:
-            zero_labels = len([rec for rec in self.records if str(rec["castellvi"]) in self.no_side])
-            non_zero_labels = len(self.records) - zero_labels
-            return 2 * non_zero_labels + zero_labels
-        else:
-            return len(self.records)
+        return len(self.records)
 
 
     def __getitem__(self, index):
-        '''
-        if self.right_side is set to True, every record contributes two images to the dataset - the original and a flipped version. 
-        In other words, the dataset's length is twice the number of records. This is implemented by the __len__() method. 
-        In the __getitem__(self, index) method, we use record_index = index // 2 to map the index back to a record_index for our actual records. 
-        Integer division (//) by 2 ensures that for two consecutive indices in our dataset, we refer to the same record. 
-        For instance, index=0 and index=1 both refer to record_index=0, index=2 and index=3 refer to record_index=1, 
-        and so on. However, we don't want to provide the exact same image for two consecutive indices. That's why we use the flip variable. 
-        We want one of these images to be the original and one to be flipped. 
-        The expression (index % 2 == 1) is True for odd indices and False for even ones. 
-        This means, for the same record, we return the original image when the dataset index is even and the flipped image when the dataset index is odd.
-        Now, we add another condition. We only flip an image if its label is not zero. We achieve this with the condition if str(record["castellvi"]) != '0' and flip:. 
-        Here, flip is already determined based on the index being odd or even, and the additional condition str(record["castellvi"]) != '0' ensures that only non-zero labeled images are flipped. 
-        This way, zero-labeled images are never flipped, but each non-zero labeled image appears twice in the dataset: once in its original orientation and once flipped.
-        Please note that this will only work if self.right_side is set to True. 
-        If you want to flip non-zero labeled images even when self.right_side is set to False, 
-        then you would need to adjust the __len__() and __getitem__(self, index) methods accordingly, 
-        because currently, self.right_side being False implies that each record only contributes one image to the dataset (the original, unflipped one).
-
-        
+        '''        
         Returns the data point at the given index. If we are using the right side, then we flip the image for non-zero labels.
         Args:
             index (int): index of the data point to return
@@ -86,39 +55,35 @@ class VerSe(Dataset):
 
         '''
 
-        record_index = index // 2 if self.right_side else index
-        record = self.records[record_index] 
+        record = self.records[index] 
 
         img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
-        img = img[np.newaxis, ...] 
+        if record["flip"]:
+            print("subject_name:", record["subject"])
+            img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
 
-        # Flip the image if we are using the right side and the index is odd. Because we are using the right side, we flip the image but if the label is 0, we don't flip it.
-        flip = (index % 2 == 1) if self.right_side else False
-
-
-        if flip:
-            if str(record["castellvi"]) not in self.no_side: # Only flip if label is not 0
-                img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
-
-
+        
+        img = img[np.newaxis, ...]         
         # Get the label
-        labels = self._get_label_based_on_conditions(record, flip)
+        labels = self._get_label_based_on_conditions(record)
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
 
         return {"target": inputs, "class": labels}
 
 
-    def _get_label_based_on_conditions(self, record, flip):
+    def _get_label_based_on_conditions(self, record):
         # This method is created to clean up the label generation code in getitem.
         # Replace this with the appropriate conditions and methods you have for generating labels
 
-        if self.binary:
+        if self.classification_type == "binary":
             return self._get_binary_label(record)
-        elif self.right_side:
-            return self._get_castellvi_right_side_label(record, flip=flip)
-        else:
+        elif self.classification_type == "right_side":
+            return self._get_castellvi_right_side_label(record)
+        elif self.classification_type == "multi_class":
             return self._get_castellvi_multi_labels(record)
+        else:
+            raise ValueError("Invalid classification type")
 
     def _get_binary_label(self, record):
 
@@ -126,22 +91,13 @@ class VerSe(Dataset):
             return 1
         else:
             return 0
-    
-    def _get_castellvi_label(self, record):
 
-        castellvi = str(record["castellvi"])
-        one_hot = np.zeros(len(self.categories))    
-        one_hot[self.castellvi_dict[castellvi]] = 1
-        return one_hot
-
-
-    def _get_castellvi_right_side_label(self, record, flip):
+    def _get_castellvi_right_side_label(self, record):
 
         """
         Returns the label for the right side of the image. If the image is flipped, then the label is flipped as well.
         Args:
             record (dict): record to get the label for
-            flip (bool): whether the image is flipped
         Returns:
             int: label for the right side of the image
 
@@ -153,19 +109,15 @@ class VerSe(Dataset):
 
         castellvi = str(record["castellvi"])
         side = str(record['side'])
-        
-        if castellvi in self.no_side:
-            return 0
-
-        if flip:
-            side = 'L' if side == 'R' else 'R'
 
         if castellvi == '2b' or ((castellvi == '2a' and side == 'R')):
             return 1
+        
         elif castellvi == '3b' or (castellvi == '3a' and side == 'R'):
             return 2
         
-        return 0
+        else:
+            return 0
 
     def _get_castellvi_multi_labels(self, record):
 

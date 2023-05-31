@@ -22,15 +22,13 @@ def get_model_class(model_name:str):
     return model_classes.get(model_name)
 
 def main(params):
-    torch.manual_seed(params.manual_seed)
-    print(params)
-    
-    processor = DataHandler(master_list=params.master_list_v2,
+    torch.manual_seed(params.manual_seed)    
+    processor = DataHandler(master_list=params.master_list,
                             dataset=params.data_root,
                             data_types=params.data_types,
                             image_types=params.img_types)
     
-    verse_data_module = VerSeDataModule(opt=params, processor=processor, master_list=params.master_list_v2)
+    verse_data_module = VerSeDataModule(opt=params, processor=processor, master_list=params.master_list)
     # Model selection
     ModelClass = get_model_class(params.model)
     if ModelClass is None:

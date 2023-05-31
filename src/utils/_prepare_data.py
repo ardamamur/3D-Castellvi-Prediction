@@ -22,7 +22,6 @@ class DataHandler:
         self.bids = BIDS_Global_info(dataset, data_types, additional_key = image_types, verbose=True)
         self.verse_records = []
         self.tri_records = []
-        self.no_side =['0', '1a', '1b', '2b', '3b', '4']
         master_df = pd.read_excel(master_list)
         self.master_records = master_df.dropna(subset = "Full_Id").to_dict('records')
 
@@ -31,14 +30,13 @@ class DataHandler:
             sub, dataset, split, ce = self._split_full_id(record["Full_Id"])
 
             castellvi = str(record["Castellvi"])
-            dataset_split = str(record['Split'])          #String 
+            dataset_split = str(record['Split'])
+            flip = record['Flip']        
             last_l = record["Last_L"]
-            if castellvi in self.no_side:
-                side = None
-            else:                                       #L4-L6
-                side = record["2a/3a Side"]             #L/R or NaN
+            side = record["2a/3a Side"]
+
             if dataset == "verse":
-                verse_record = self._create_verse_record(sub, split, castellvi, last_l, side, dataset_split)
+                verse_record = self._create_verse_record(sub, split, castellvi, last_l, side, dataset_split, flip)
                 self.verse_records.append(verse_record)
             elif dataset == "tri":
                 tri_record = self._create_tri_record(sub, ce, castellvi, last_l, side)
@@ -65,7 +63,7 @@ class DataHandler:
         
         return sub, dataset, split, ce
 
-    def _create_verse_record(self, sub, split, castellvi, last_l, side, dataset_split):
+    def _create_verse_record(self, sub, split, castellvi, last_l, side, dataset_split, flip):
         record = {}
 
         record["dataset"] = "verse"
@@ -73,6 +71,7 @@ class DataHandler:
         record["subject"] = sub
         record["split"] = split
         record["dataset_split"] = dataset_split
+        record["flip"] = flip
 
         raw_file = None
         seg_file = None
