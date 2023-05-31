@@ -9,7 +9,7 @@ from torch import nn
 import pytorch_lightning as pl
 import torchmetrics.functional as mF
 
-from models.DenseNet3D import monai_dense169_3d
+from models.DenseNet3D import monai_dense169_3d_multi_mlp
 from torch.optim import lr_scheduler
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -49,6 +49,7 @@ class DenseNetV2(pl.LightningModule):
         print(f"{self._get_name()} loaded with {self.num_classes} classes, data_size {self.data_size} and {self.data_channel} channel")
 
     def forward(self, x):
+        x = x.float()
         logits = self.network(x)  # [-1, 1]
         return logits
 
@@ -257,8 +258,8 @@ class DenseNetV2(pl.LightningModule):
         Returns:
             modified and init network based on internal parameter
         """
-        if id == "densenet":
-            network_func = monai_dense169_3d
+        if id == "densenet_multi_mlp":
+            network_func = monai_dense169_3d_multi_mlp
         else:
             raise Exception("Not Implemented")
         
