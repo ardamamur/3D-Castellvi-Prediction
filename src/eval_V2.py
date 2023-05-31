@@ -1,7 +1,10 @@
 import sys
-sys.path.append('/u/home/ank/3D-Castellvi-Prediction/bids')
+sys.path.append('/data1/practical-sose23/castellvi/castellvi_prediction/bids')
 import torch
+import os
 import argparse
+import json
+import re
 from utils._prepare_data import DataHandler, read_config
 from utils._get_model import *
 from modules.DenseNetModule import DenseNet
@@ -17,6 +20,23 @@ class Eval:
         self.data_size = (128,86,136)
         self.num_classes = opt.num_classes
         self.softmax = nn.Softmax(dim=1)
+
+    def _get_version_number(self, ckpt_path):
+        version = re.search(r'version_(\d+)', ckpt_path)
+        if version is None:
+            raise ValueError("Invalid checkpoint path: cannot extract version number.")
+        version_number = version.group(1)
+        return version_number
+
+    def get_best_model_paths(self, dir_path):
+        best_model_paths = []
+        for root, dirs, files in os.walk(dir_path):
+            if files:  # if there are files in the directory
+                # Extract validation loss from file name and choose the file with the smallest loss
+                best_model_file = min(files, key=lambda f: float(re.search(r'val_loss=(\d+\.\d+)', f).group(1)))
+                best_model_paths.append(os.path.join(root, best_model_file))
+        return best_model_paths
+
 
     def get_label_map(self):
         if self.opt.classification_type == "right_side":
@@ -44,7 +64,7 @@ class Eval:
     
     def get_test_dataset(self):
         # extract the test subjects from masterlist by usıng the Split column and if Flip is 0
-        masterlist = pd.read_excel("VerSe_masterlist_V3.xlsx", index_col=0)
+        masterlist = pd.read_excel(self.opt.master_list, index_col=0)
         masterlist = masterlist.loc[masterlist['Split'] == 'test'] # extract test subjects
         masterlist = masterlist.loc[masterlist['Flip'] == 0] # extract subjects with Flip = 0
         test_subjects = masterlist.index.tolist()
@@ -63,13 +83,13 @@ class Eval:
         records = processor.verse_records
         # return speicific indexes of records that are in test_subjects
         for index in range(len(records)):
-            if records[index].subject in test_subjects:
+            if index in test_subjects:
                 test_records.append(records[index])
 
         return test_records
     
-    def get_predictions(self, model):
-
+    def get_predictions(self, model, version_number):
+        # TODO : save each pred results for images
         # Move model to GPU
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model.to(device)
@@ -88,10 +108,9 @@ class Eval:
 
         y_pred = []
         y_true = []
+        eval_results = []
+
         for record in test_records:
-            
-            # Add true label to y_true
-            y_true.append(str(record["castellvi"]))
             
             # Get the data
             img = processor._get_cutout(record,return_seg=self.opt.use_seg, max_shape=self.data_size)
@@ -115,7 +134,7 @@ class Eval:
 
             # Get the label
             label = str(record["castellvi"]) # 0, 2a, 2b, 3a, 3b, 4
-
+            y_true.append(label)
 
             with torch.no_grad():
                 output_1 = model(img)
@@ -131,12 +150,24 @@ class Eval:
                 pred_cls_2 = str(pred_cls_2.item())
 
                 # Determine the final prediction based on the pair of predictions
-                pred_cls = self.get_label_map.get((pred_cls_1, pred_cls_2))
+                pred_cls = self.get_label_map().get((pred_cls_1, pred_cls_2))
 
                 if pred_cls is None:
                     raise ValueError("Invalid prediction pair: ", pred_cls_1, pred_cls_2)
                 
                 y_pred.append(pred_cls)
+
+            
+            # Add the prediction results to eval_results
+            eval_results.append({
+                'subject_name': record['subject'],
+                'actual_label': label,
+                'predicted_label': pred_cls,
+            })
+
+
+        with open(self.opt.experiments + f'eval_results/eval_results_experiment_{version_number}.json', 'w') as f:
+            json.dump(eval_results, f, indent=4)
 
         return y_true, y_pred
     
@@ -160,16 +191,23 @@ class Eval:
                 
 def main(params):
     evaluator = Eval(opt=params)
-    ckpt_path = ''    
-    model = evaluator.load_model(path=ckpt_path, params=params)
-    y_true, y_pred = evaluator.get_predictions(model)
-    f1 = evaluator.get_f1_score(y_true, y_pred)
-    cm = evaluator.get_confusion_matrix(y_true, y_pred)
+    model_dir_path = params.experiments + 'best_models'
+    # Get paths to the best models
+    best_model_paths = evaluator.get_best_model_paths(model_dir_path)
 
-    print("F1 score: ", f1)
-    print("Confusion matrix: ", cm)
 
-    evaluator.plot_confusion_matrix(cm, classes=['0', '2a', '2b', '3a', '3b', '4'], normalize=False, title='Confusion matrix', cmap=plt.cm.Blues)
+    # Run evaluation for each best model
+    for ckpt_path in best_model_paths:
+        model = evaluator.load_model(path=ckpt_path, params=params)
+        version_number = evaluator._get_version_number(ckpt_path)
+        y_true, y_pred = evaluator.get_predictions(model, version_number)
+        f1 = evaluator.get_f1_score(y_true, y_pred)
+        cm = evaluator.get_confusion_matrix(y_true, y_pred)
+
+        print('Version Number:', version_number)
+        print("Model: ", ckpt_path)
+        print("F1 score: ", f1)
+        print("Confusion matrix: \n ", cm)
 
 
 if __name__ == "__main__":

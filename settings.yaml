@@ -15,7 +15,7 @@ img_types:
   - 'cortex'
 
 # Path to the masterlist file
-master_list: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V3.xlsx'
+master_list: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx'
 
 
 # Type of classification to be used
@@ -33,7 +33,7 @@ castellvi_classes:
   - '0'
 
 # Name of the model to be used
-model: 'densenet'
+model: densenet
 
 
 # Whether to use segmentation or not
@@ -41,6 +41,9 @@ use_seg: False
 
 # Whether to use under-sampling or not
 under_sample: False
+
+# Whether to use weighted loss or not
+weighted_loss: False
 
 # Phase of the project (train/test)
 phase: 'train'

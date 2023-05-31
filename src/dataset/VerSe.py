@@ -59,6 +59,7 @@ class VerSe(Dataset):
 
         img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
         if record["flip"]:
+            # Flip 2b and 3b labels and 0 cases
             print("subject_name:", record["subject"])
             img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
 
