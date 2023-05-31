@@ -24,14 +24,14 @@ class VerSeDataModule(pl.LightningDataModule):
         # Assign train/val datasets for use in dataloaders
         records = self.processor.verse_records
         for record in records:
-            if record["split"] == "train":
+            if record["dataset_split"] == "train":
                 self.train_records.append(record)
-            elif record["split"] == "val":
+            elif record["dataset_split"] == "val":
                 self.val_records.append(record)
-            elif record["split"] == "test":
+            elif record["dataset_split"] == "test":
                 self.test_records.append(record)
             else:
-                raise ValueError("Invalid split value in record: {}".format(record["split"]))
+                raise ValueError("Invalid split value in record: {}".format(record["dataset_split"]))
             
         if stage in {'fit', None}:
             self.train_dataset = VerSe(self.opt, self.processor, self.train_records, training=True)
