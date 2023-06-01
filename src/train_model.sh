@@ -7,17 +7,16 @@ export PYTHONPATH=$PYTHONPATH:/data1/practical-sose23/castellvi/castellvi_predic
 export PYTHONWARNINGS="ignore"
 
 
-""" 
-Experiments :
-    1. DenseNet	- Binary - Both side
-    2. DenseNet	- Multi Class - Right side
-    3. DenseNet	- Multi Class - Right side, weighted loss
-    4. DenseNet	- Multi Class - Right side, weighted sample
-    5. DenseNet	- Multi Class - Right side, over_sampling
-    6. DenseNet	- Multi Class - Right side, weighted loss, over_sampling
-    7. DenseNet	- Multi Class - Right side, weighted sample, over_sampling 
 
-"""
+# Experiments :
+#     1. DenseNet	- Binary - Both side
+#     2. DenseNet	- Multi Class - Right side
+#     3. DenseNet	- Multi Class - Right side, weighted loss
+#     4. DenseNet	- Multi Class - Right side, weighted sample
+#     5. DenseNet	- Multi Class - Right side, over_sampling
+#     6. DenseNet	- Multi Class - Right side, weighted loss, over_sampling
+#     7. DenseNet	- Multi Class - Right side, weighted sample, over_sampling 
+
 
 
 ############################################# EXPERIMENT 1 ######################################################################
