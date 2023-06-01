@@ -2,22 +2,22 @@ import pytorch_lightning as pl
 import pandas as pd
 from utils._prepare_data import DataHandler
 from dataset.VerSe import VerSe
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 import torch
 
 
 class VerSeDataModule(pl.LightningDataModule):
 
-    def __init__(self, opt, processor:DataHandler, master_list:str):
+    def __init__(self, opt, processor:DataHandler):
         super().__init__()
         self.opt = opt
         self.processor = processor
         self.batch_size = opt.batch_size
-        self.master_df = pd.read_excel(master_list)
         self.train_records = []
         self.val_records = []
         self.test_records = []
-        self.under_sample = opt.under_sample
+        self.weighted_sample = opt.weighted_sample
+        self.num_workers = opt.num_workers
 
     def prepare_data(self):
         pass
@@ -26,14 +26,14 @@ class VerSeDataModule(pl.LightningDataModule):
         # Assign train/val datasets for use in dataloaders
         records = self.processor.verse_records
         for record in records:
-            if record["split"] == "train":
+            if record["dataset_split"] == "train":
                 self.train_records.append(record)
-            elif record["split"] == "val":
+            elif record["dataset_split"] == "val":
                 self.val_records.append(record)
-            elif record["split"] == "test":
+            elif record["dataset_split"] == "test":
                 self.test_records.append(record)
             else:
-                raise ValueError("Invalid split value in record: {}".format(record["split"]))
+                raise ValueError("Invalid split value {} in record: {}".format(record["dataset_split"], record["subject"]))
             
         if stage in {'fit', None}:
             self.train_dataset = VerSe(self.opt, self.processor, self.train_records, training=True)
@@ -70,22 +70,16 @@ class VerSeDataModule(pl.LightningDataModule):
 
 
     def train_dataloader(self):
-
-        dataset = VerSe(self.processor, self.castellvi_classes, self.pad_size, self.use_seg, self.use_binary_classes, training=True)
-        train_dataset, _ = random_split(dataset, self.train_val_split, generator = torch.Generator().manual_seed(42))
-
-        sampler = self._get_sampler(train_dataset)
-        return DataLoader(train_dataset, batch_size=self.batch_size, sampler = sampler)
+        if self.weighted_sample: 
+            sampler = self._get_sampler(self.train_dataset)
+            return DataLoader(self.train_dataset, batch_size=self.batch_size, sampler = sampler)
+        else:
+            return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle = True, num_workers = self.num_workers)
 
     def val_dataloader(self):
-        #TODO: Does weighted sampling make sense for validation too?
-        dataset = VerSe(self.processor, self.castellvi_classes, self.pad_size, self.use_seg, self.use_binary_classes, training=True)
-        _ , val_dataset = random_split(dataset, self.train_val_split, generator = torch.Generator().manual_seed(42))
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle = True, num_workers = self.num_workers)
 
-        
-        return DataLoader(val_dataset, batch_size=self.batch_size)
-"""
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size)
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle = True, num_workers = self.num_workers)
 
 
