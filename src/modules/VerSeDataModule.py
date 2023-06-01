@@ -33,11 +33,7 @@ class VerSeDataModule(pl.LightningDataModule):
             elif record["dataset_split"] == "test":
                 self.test_records.append(record)
             else:
-<<<<<<< HEAD
-                raise ValueError("Invalid split value in record: {}".format(record["dataset_split"]))
-=======
                 raise ValueError("Invalid split value {} in record: {}".format(record["dataset_split"], record["subject"]))
->>>>>>> 94d5d1a38affb99bb451e912aa769847935e24de
             
         if stage in {'fit', None}:
             self.train_dataset = VerSe(self.opt, self.processor, self.train_records, training=True)
