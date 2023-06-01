@@ -2,6 +2,7 @@
 bids/
 experiments/
 runs/
+*.bak
 
 settings.yaml
 

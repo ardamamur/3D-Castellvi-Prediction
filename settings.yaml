@@ -79,7 +79,7 @@ n_epochs: 150
 resume_path: ''
 
 # Directory to save the experimental results
-experiments: '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/experiments'
+experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments'
 
 # Whether to use CUDA or not
 no_cuda: False
