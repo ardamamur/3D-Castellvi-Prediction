@@ -1,7 +1,7 @@
 # Directories containing the data
 data_root: 
-  - '/data1/practical-sose23/dataset-verse19'
-  - '/data1/practical-sose23/dataset-verse20'
+  - '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19'
+  - '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20'
 
 # Types of data contained in the directories
 data_types: 
@@ -39,8 +39,8 @@ model: densenet
 # Whether to use segmentation or not
 use_seg: False
 
-# Whether to use under-sampling or not
-under_sample: False
+# Whether to use weighted sampling for equal label probabilities
+weighted_sample: False
 
 # Whether to use weighted loss or not
 weighted_loss: False
@@ -66,6 +66,9 @@ total_iterations: 100
 # Number of samples per batch
 batch_size: 8
 
+# Number of Data Loader Workers
+num_workers: 0
+
 # Interval for saving the model during training
 save_intervals: 10
 
@@ -76,7 +79,7 @@ n_epochs: 150
 resume_path: ''
 
 # Directory to save the experimental results
-experiments: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/'
+experiments: '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/experiments'
 
 # Whether to use CUDA or not
 no_cuda: False

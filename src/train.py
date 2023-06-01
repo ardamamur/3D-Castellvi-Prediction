@@ -28,7 +28,7 @@ def main(params):
                             data_types=params.data_types,
                             image_types=params.img_types)
     
-    verse_data_module = VerSeDataModule(opt=params, processor=processor, master_list=params.master_list)
+    verse_data_module = VerSeDataModule(opt=params, processor=processor)
     # Model selection
     ModelClass = get_model_class(params.model)
     if ModelClass is None:
@@ -82,6 +82,8 @@ def start_tensorboard(port, tracking_address: str):
 
 if __name__ == '__main__':
 
+    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+
     if torch.cuda.is_available():
         print('Running on GPU #', os.environ["CUDA_VISIBLE_DEVICES"])
     else:
@@ -89,7 +91,7 @@ if __name__ == '__main__':
 
     # Get Settings from config file
     parser = argparse.ArgumentParser()
-    parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
+    parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
     args = parser.parse_args()
     params = read_config(args.settings)
     print(params)
