@@ -119,6 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--manual_seed', type=int, default=1)
     parser.add_argument('--num_classes', type=int, default=3)
     parser.add_argument('--port', type=int, default=6484)
+    parser.add_argument('--flip_all', type=bool, default=True)
 
     params = parser.parse_args()
 

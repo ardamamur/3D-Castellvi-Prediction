@@ -25,6 +25,13 @@ class VerSeDataModule(pl.LightningDataModule):
     def setup(self, stage=None):
         # Assign train/val datasets for use in dataloaders
         records = self.processor.verse_records
+        print(f"Total records: {len(records)}")
+
+        if not self.opt.flip_all:
+            # # remove recorde if their flip value is 1 and castellvi value does not contain 'a' or 'b' inside it
+            records = [record for record in records if record["flip"] == 1 or ("a" in record["castellvi"] or "b" in record["castellvi"])] 
+            print(f"Total records after removing non-flipped records: {len(records)}")
+
         for record in records:
             if record["dataset_split"] == "train":
                 self.train_records.append(record)
