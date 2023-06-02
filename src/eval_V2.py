@@ -110,6 +110,15 @@ class Eval:
         y_true = []
         eval_results = []
 
+        # Check if eval_results file exists and load it
+        eval_file_path = self.opt.experiments + "/eval_results.json"
+        if os.path.exists(eval_file_path):
+            with open(eval_file_path, 'r') as f:
+                eval_results = json.load(f)
+
+        # Convert eval_results into a dictionary for easy update
+        eval_results_dict = {item['subject_name']: item for item in eval_results}
+
         for record in test_records:
             
             # Get the data
@@ -158,19 +167,27 @@ class Eval:
                 y_pred.append(pred_cls)
 
             
-            # Add the prediction results to eval_results
-            eval_results.append({
+             # Update eval_results_dict
+            subject_results = eval_results_dict.get(record['subject'], {
                 'subject_name': record['subject'],
                 'actual_label': label,
-                'predicted_label': pred_cls,
+                'predicted_labels': {}
             })
+            subject_results['predicted_labels'][f'experiment_{version_number}'] = pred_cls
+            if pred_cls == label:
+                subject_results['correct'] = subject_results.get('correct', 0) + 1
+            else:
+                subject_results['incorrect'] = subject_results.get('incorrect', 0) + 1
+            eval_results_dict[record['subject']] = subject_results
 
+        # Convert eval_results_dict back into a list
+        eval_results = list(eval_results_dict.values())
 
-        with open(self.opt.experiments + f'eval_results/eval_results_experiment_{version_number}.json', 'w') as f:
+        with open(eval_file_path, 'w') as f:
             json.dump(eval_results, f, indent=4)
 
         return y_true, y_pred
-    
+        
     def get_f1_score(self, y_true, y_pred):
         f1 = f1_score(y_true, y_pred, average='weighted')
         return f1
@@ -189,31 +206,43 @@ class Eval:
 
 
                 
-def main(params):
+def main(params, ckpt_path=None):
     evaluator = Eval(opt=params)
-    model_dir_path = params.experiments + 'best_models'
-    # Get paths to the best models
-    best_model_paths = evaluator.get_best_model_paths(model_dir_path)
+    # Get paths to the best model
+    best_model= os.listdir(ckpt_path)[0]
+    best_model_path = [os.path.join(ckpt_path, best_model)]
 
 
     # Run evaluation for each best model
-    for ckpt_path in best_model_paths:
-        model = evaluator.load_model(path=ckpt_path, params=params)
-        version_number = evaluator._get_version_number(ckpt_path)
-        y_true, y_pred = evaluator.get_predictions(model, version_number)
-        f1 = evaluator.get_f1_score(y_true, y_pred)
-        cm = evaluator.get_confusion_matrix(y_true, y_pred)
 
-        print('Version Number:', version_number)
-        print("Model: ", ckpt_path)
-        print("F1 score: ", f1)
-        print("Confusion matrix: \n ", cm)
+    model = evaluator.load_model(path=best_model_path, params=params)
+
+    y_true, y_pred = evaluator.get_predictions(model, version_number=params.version_no)
+    f1 = evaluator.get_f1_score(y_true, y_pred)
+    cm = evaluator.get_confusion_matrix(y_true, y_pred)
+
+    print('Version Number:', params.version_no)
+    print("Model: ", ckpt_path)
+    print("F1 score: ", f1)
+    print("Confusion matrix: \n ", cm)
 
 
 if __name__ == "__main__":
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
-    args = parser.parse_args()
-    params = read_config(args.settings)
-    main(params=params)
+
+    parser = argparse.ArgumentParser(description='Training settings')
+    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20'])
+    parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
+    parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
+    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
+    parser.add_argument('--classification_type', default='right_side')
+    parser.add_argument('--model', default='densenet')
+    parser.add_argument('--use_seg', type=bool, default=False)
+    parser.add_argument('--experiments', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments')
+    parser.add_argument('--num_classes', type=int, default=3)
+    parser.add_argument('--version_no', type=int, default=0)
+
+
+    params = parser.parse_args()
+    ckpt_path = params.experiments + '/' + params.model + '/best_models/' + params.versiion_no 
+    main(params=params, ckpt_path=ckpt_path)
+
