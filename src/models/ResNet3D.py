@@ -1,198 +1,44 @@
+from monai.networks.nets import ResNet, resnet101
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
-import math
-from functools import partial
+from typing import Any, Optional, Sequence, Tuple, Type, Union
 
-__all__ = [
-    'ResNet', 'get_resnet_model'
-]
+resnet = resnet101(
+    pretrained=False, spatial_dims=3, n_input_channels=1, num_classes=3,
+)
 
-def conv3x3x3(in_planes, out_planes, stride=1, dilation=1):
-    # 3x3x3 convolution with padding
-    return nn.Conv3d(
-        in_planes,
-        out_planes,
-        kernel_size=3,
-        dilation=dilation,
-        stride=stride,
-        padding=dilation,
-        bias=False)
+def create_pretrained_medical_resnet(
+    pretrained_path: str,
+    model_constructor: callable = resnet,
+    spatial_dims: int = 3,
+    n_input_channels: int = 1,
+    num_classes: int = 1,
+    **kwargs_monai_resnet: Any
+) -> Tuple[ResNet, Sequence[str]]:
+    """This si specific constructor for MONAI ResNet module loading MedicalNEt weights.
 
-def downsample_basic_block(x, planes, stride, no_cuda=False):
-    out = F.avg_pool3d(x, kernel_size=1, stride=stride)
-    zero_pads = torch.Tensor(
-        out.size(0), planes - out.size(1), out.size(2), out.size(3),
-        out.size(4)).zero_()
-    if not no_cuda:
-        if isinstance(out.data, torch.cuda.FloatTensor):
-            zero_pads = zero_pads.cuda()
+    See:
+    - https://github.com/Project-MONAI/MONAI
+    - https://github.com/Borda/MedicalNet
+    """
+    net = model_constructor(
+        pretrained=False,
+        spatial_dims=spatial_dims,
+        n_input_channels=n_input_channels,
+        num_classes=num_classes,
+        **kwargs_monai_resnet
+    )
+    net_dict = net.state_dict()
+    pretrain = torch.load(pretrained_path)
+    pretrain['state_dict'] = {k.replace('module.', ''): v for k, v in pretrain['state_dict'].items()}
+    missing = tuple({k for k in net_dict.keys() if k not in pretrain['state_dict']})
+    print(f"missing in pretrained: {len(missing)}")
+    inside = tuple({k for k in pretrain['state_dict'] if k in net_dict.keys()})
+    print(f"inside pretrained: {len(inside)}")
+    unused = tuple({k for k in pretrain['state_dict'] if k not in net_dict.keys()})
+    print(f"unused pretrained: {len(unused)}")
+    assert len(inside) > len(missing)
+    assert len(inside) > len(unused)
 
-    out = Variable(torch.cat([out.data, zero_pads], dim=1))
-
-    return out
-
-class Bottleneck(nn.Module):
-    expansion = 4
-
-    def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm3d(planes)
-        self.conv2 = nn.Conv3d(
-            planes, planes, kernel_size=3, stride=stride, dilation=dilation, padding=dilation, bias=False)
-        self.bn2 = nn.BatchNorm3d(planes)
-        self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm3d(planes * 4)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
-        self.dilation = dilation
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
-
-class Bottleneck(nn.Module):
-    expansion = 4
-
-    def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm3d(planes)
-        self.conv2 = nn.Conv3d(
-            planes, planes, kernel_size=3, stride=stride, dilation=dilation, padding=dilation, bias=False)
-        self.bn2 = nn.BatchNorm3d(planes)
-        self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm3d(planes * 4)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
-        self.dilation = dilation
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
-
-class ResNet(nn.Module):
-
-    def __init__(self,
-                 block,
-                 layers,
-                 num_classes,
-                 shortcut_type='B',
-                 no_cuda = False):
-        self.inplanes = 64
-        self.no_cuda = no_cuda
-        super(ResNet, self).__init__()
-        self.conv1 = nn.Conv3d(
-            1,
-            64,
-            kernel_size=7,
-            stride=(2, 2, 2),
-            padding=(3, 3, 3),
-            bias=False)
-            
-        self.bn1 = nn.BatchNorm3d(64)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], shortcut_type)
-        self.layer2 = self._make_layer(
-            block, 128, layers[1], shortcut_type, stride=2)
-        self.layer3 = self._make_layer(
-            block, 256, layers[2], shortcut_type, stride=1, dilation=2)
-        self.layer4 = self._make_layer(
-            block, 512, layers[3], shortcut_type, stride=1, dilation=4)
-        self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-        for m in self.modules():
-            if isinstance(m, nn.Conv3d):
-                m.weight = nn.init.kaiming_normal(m.weight, mode='fan_out')
-            elif isinstance(m, nn.BatchNorm3d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-
-    def _make_layer(self, block, planes, blocks, shortcut_type, stride=1, dilation=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
-            if shortcut_type == 'A':
-                downsample = partial(
-                    downsample_basic_block,
-                    planes=planes * block.expansion,
-                    stride=stride,
-                    no_cuda=self.no_cuda)
-            else:
-                downsample = nn.Sequential(
-                    nn.Conv3d(
-                        self.inplanes,
-                        planes * block.expansion,
-                        kernel_size=1,
-                        stride=stride,
-                        bias=False), nn.BatchNorm3d(planes * block.expansion))
-
-        layers = []
-        layers.append(block(self.inplanes, planes, stride=stride, dilation=dilation, downsample=downsample))
-        self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, dilation=dilation))
-
-        return nn.Sequential(*layers)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-
-        x = self.avgpool(x)
-
-        x = x.view(x.size(0), -1)  # Flatten the tensor
-        x = self.fc(x)
-
-        return x
-
-
-def get_resnet_model(num_classes, shortcut_type='B', no_cuda=False):
-    # ResNet 101 
-    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes, shortcut_type, no_cuda)
-    return model
+    pretrain['state_dict'] = {k: v for k, v in pretrain['state_dict'].items() if k in net_dict.keys()}
+    net.load_state_dict(pretrain['state_dict'], strict=False)
+    return net, inside

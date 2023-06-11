@@ -1,68 +1,236 @@
-import pytorch_lightning as pl
-from typing import Dict, Sequence
-import torch.optim as optim
+from __future__ import annotations
+import argparse
+import typing
+import warnings
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from models.ResNet3D import *
+from torch import nn
+import pytorch_lightning as pl
+import torchmetrics.functional as mF
+from models.DenseNet3D import monai_dense169_3d
+from monai.networks.nets import EfficientNetBN, ResNet, resnet18
+from models.ResNet3D import create_pretrained_medical_resnet
+from utils._get_model import _get_weights
+from torch.optim import lr_scheduler
+import pandas as pd
+import matplotlib.pyplot as plt
 
-from utils._get_model import _generate_model, _get_num_classes
 
-class ResNetLightning(pl.LightningModule):
-    def __init__(self, params):
+class ResNet(pl.LightningModule):
+    def __init__(self, opt, num_classes: int, data_size: tuple, data_channel: int):
         super().__init__()
+        self.save_hyperparameters() # this call saves the arguments as hyperparameters
+        self.counter = 0
+        self.thread = None
+        self.opt = opt
 
+        self.val_step_outputs = []
+        self.training_step_outputs = []
+
+        self.num_classes = num_classes
+        self.n_epoch = opt.n_epochs
+        self.scheduler_name = opt.scheduler
+        self.optimizer_name = opt.optimizer
+        self.data_size = data_size  # 2d
+        self.data_channel = data_channel
+        self.network_id = opt.model
+        self.network = self.networkX(self.network_id, pretrained=False)
         
-        # TODO add another loss function for multi class classification
-        # matthew's correlation coefficient as eval metrics
-        # In classification task you can think as regression task. 
-        self.criterion = nn.BCELoss() # or use another suitable loss function
-        self.learning_rate = params.learning_rate
-        self.weight_decay = params.weight_decay
-        self.total_iterations = params.total_iterations
-        self.num_classes = _get_num_classes(
-            binary_classification=params.binary_classification,
-            castellvi_classes=params.castellvi_classes)
-        self.model = _generate_model(
-            model=params.model,
-            num_classes=self.num_classes,
-            no_cuda=params.no_cuda)
+        self.softmax = nn.Softmax(dim=1)
 
-        print(self.model.parameters())
-        self.save_hyperparameters()
+        # TODO : Update masterlist parameter
+        if opt.weighted_loss:
+            weights = _get_weights(opt.master_list , rigth_side=True)
+            weights = torch.tensor(weights).cuda()
+            self.cross_entropy = nn.CrossEntropyLoss(weight=weights, reduction="mean")
+        else:
+            self.cross_entropy = nn.CrossEntropyLoss(reduction="mean")
 
+
+        self.l2_reg_w = 0.0
+        print(f"{self._get_name()} loaded with {self.num_classes} classes, data_size {self.data_size} and {self.data_channel} channel")
+    
+    
     def forward(self, x):
-        logits = self.model(x) # [-1, 1]
-        return self.model(x)
+        x = x.float()
+        logits = self.network(x)  # [-1, 1]
+        return logits
+    
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = torch.sigmoid(self.model(x))
-        loss = self.criterion(y_hat, y)
-        self.log('loss', loss.item(), on_step=True, on_epoch=True)
-        print(f'Train loss: {loss}')
-        return {'loss':loss}
 
-    def on_train_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        self.log('avg_train_loss', avg_loss, on_epoch=True)
+        target = batch["target"]
+        result = self.calc_pred(batch, detach2cpu=False)
+        loss = result["loss"]
+        self.training_step_outputs.append(result)
+        #self.logger.info(f"Training Loss: {loss:.4f}")
+        print(f"Training Loss: {loss.item():.4f}")
+        return {"loss": loss}  # return the loss here, we will use it later
+
+
+    def on_train_epoch_end(self) -> None:
+        if self.training_step_outputs is not None:
+
+            avg_loss = torch.stack([x['loss'] for x in self.training_step_outputs]).mean()  # Calculate average loss over the epoch
+            self.log("train_loss", avg_loss, on_epoch=True)  # Log the average loss
+            loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.training_step_outputs)
+            matthews_acc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            self.logger.experiment.add_scalar('train_matthews_acc', matthews_acc, self.current_epoch)
+            self.logger.experiment.add_scalar("train_cohen_acc", acc, self.current_epoch)
+            self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
+            self.training_step_outputs = []  # Clear the outputs at the end of each epoch
+
+
+    def configure_optimizers(self) -> dict:
+        
+        optimizer_dict = {
+            "Adam": torch.optim.Adam(self.parameters(), lr=self.opt.learning_rate, weight_decay=self.opt.weight_decay),
+            "AdamW": torch.optim.AdamW(self.parameters(), lr=self.opt.learning_rate, weight_decay=self.opt.weight_decay),
+        }
+        optimizer = optimizer_dict[self.optimizer_name]
+        lr_scheduler = self.init_lr_scheduler(self.scheduler_name, optimizer)
+        if lr_scheduler is not None:
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": lr_scheduler,
+                    "monitor": "val_loss",
+                },
+            }
+        return {"optimizer": optimizer}
+    
+
+
+    def loss_function(self, logits: torch.Tensor, labels: torch.Tensor) -> float:
+        loss = self.cross_entropy(logits, labels)
+        # if self.l2_reg_w > 0.0:
+        #     l2_reg = torch.tensor(0.0, device=self.device).to(non_blocking=True)
+        #     for param in self.parameters():
+        #         l2_reg += torch.norm(param).to(self.device, non_blocking=True)
+        #     loss += l2_reg * self.l2_reg_w
+        # return loss
+        return loss
+
+
+    def calc_pred(self, batch, detach2cpu: bool = False) -> dict:
+        target = batch["target"]
+        gt_cls = batch["class"]
+        return self.calc_pred_tensor(target, gt_cls, detach2cpu=detach2cpu)
+
+
+    def calc_pred_tensor(self, target, gt_cls, detach2cpu: bool = False) -> dict:
+        logits = self.forward(target)
+        print(len(gt_cls))
+        print(gt_cls)
+        assert (gt_cls >= 0).all() and (gt_cls < self.num_classes).all(), "Labels out of range"
+        loss = self.loss_function(logits, gt_cls)
+
+        with torch.no_grad():
+            pred_x = self.softmax(logits)  # , dim=1)
+            _, pred_cls = torch.max(pred_x, 1)
+            if detach2cpu:
+                # From here on CPU
+                gt_cls = gt_cls.detach().cpu()
+                pred_x = pred_x.detach().cpu()
+                pred_cls = pred_cls.detach().cpu()
+        result = {"loss": loss, "pred_x": pred_x, "pred_cls": pred_cls, "gt_cls": gt_cls}
+        return result
+
 
     def validation_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = torch.sigmoid(self.model(x))
-        val_loss = self.criterion(y_hat, y)
-        self.log('val_loss', val_loss.item())
-        print(f'Val loss: {val_loss}')
-        return {'val_loss':val_loss}
+        result = self.calc_pred(batch, detach2cpu=True)
+        self.val_step_outputs.append(result)
+        return result
 
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = torch.sigmoid(self.model(x))
-        test_loss = self.criterion(y_hat, y)
-        self.log('test_loss', test_loss.item())
-        return {'test_loss':test_loss}
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        scheduler = torch.optim.lr_scheduler.PolynomialLR(optimizer, total_iters=self.total_iterations, power=0.9)
-        return {"optimizer": optimizer, "lr_scheduler": scheduler}
+    def on_validation_epoch_end(self):
+        if self.val_step_outputs is not None:
+            loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.val_step_outputs)
+            loss = torch.mean(loss_a)
+            self.log("val_loss", loss, on_epoch=True)
+            
+            matthews_acc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            f1_p_cls = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, average="none", num_classes=self.num_classes, task='multiclass')
+            prec = mF.precision(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            confmat = mF.confusion_matrix(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            
+            try:
+                import seaborn as sns
+                df_cm = pd.DataFrame(confmat.numpy(), index=range(self.num_classes), columns=range(self.num_classes))
+                plt.figure(figsize=(10, 7))
+                fig_ = sns.heatmap(df_cm, annot=True, fmt="d", cmap="Spectral").get_figure()
+                self.logger.experiment.add_figure("Confusion matrix", fig_, self.current_epoch)
+                plt.close(fig_)
+            except Exception as e:
+                print("caught exception in confusion matrix", e)
+
+            # Log important validation values
+            self.logger.experiment.add_scalar('train_matthews_acc', matthews_acc, self.current_epoch)
+            self.logger.experiment.add_scalar('val_matthews_acc', matthews_acc, self.current_epoch)
+            self.logger.experiment.add_scalar("val_cohen_acc", acc, self.current_epoch)
+            self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
+            self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
+            self.logger.experiment.add_text("f1_p_cls", str(f1_p_cls.tolist()), self.current_epoch)
+
+
+    @torch.no_grad()
+    def cat_metrics(self, outputs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        loss_a: list[float] = []
+        predictions_a: list[torch.Tensor] = []
+        pred_cls_a: list[torch.Tensor] = []
+        gt_cls_a: list[torch.Tensor] = []
+        for o in outputs:
+            loss, pred_x, pred_cls, vert_cls = o["loss"], o["pred_x"], o["pred_cls"], o["gt_cls"]
+            # loss_a.append(loss)
+            loss_a.append(loss)
+            predictions_a.append(pred_x)
+            pred_cls_a.append(pred_cls)
+            gt_cls_a.append(vert_cls)
+        loss_t = torch.Tensor(loss_a)
+        predictions_t = torch.cat(predictions_a)
+        pred_cls_t = torch.cat(pred_cls_a).to(torch.int)
+        gt_cls_t = torch.cat(gt_cls_a).to(torch.int)
+        return loss_t, predictions_t, pred_cls_t, gt_cls_t
+
+
+    def init_lr_scheduler(self, name, optimizer):
+        scheduler_dict = {
+            "cosine": lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.n_epoch, eta_min=1e-7),
+            "exponential": lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=0.95),
+            "polynomial": lr_scheduler.PolynomialLR(optimizer, total_iters=self.opt.total_iterations, power=0.9),
+        }
+        if name in scheduler_dict:
+            return scheduler_dict[name]
+        return None
+
+
+    def networkX(self, id: int | str, pretrained: bool = True, true_3d: bool = True) -> nn.Module:
+        """fetches and inits the corresponding network
+        Args:
+            id: int or str of network
+        Returns:
+            modified and init network based on internal parameter
+        """
+        from monai.networks.nets import ResNet, resnet101
+        if id == "resnet":
+            # todo: add pretrained
+            # Load the model (let's assume you're using ResNet-50)
+            PATH_PRETRAINED_WEIGHTS = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/pretrained_weigths/resnet/resnet_101.pth"
+            net, pretraineds_layers = create_pretrained_medical_resnet(PATH_PRETRAINED_WEIGHTS, model_constructor=resnet101, num_classes=self.num_classes)
+            for n, param in net.named_parameters():
+                param.requires_grad = bool(n not in pretraineds_layers)
+            return net
+                        
+        else:
+            raise Exception("Not Implemented")
+        
+        num_classes = self.num_classes
+        #return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained)
+
+        
+    def __str__(self):
+        return f"{self.network_id}"

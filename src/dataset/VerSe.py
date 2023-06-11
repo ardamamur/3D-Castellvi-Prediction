@@ -24,7 +24,7 @@ class VerSe(Dataset):
         Returns:
             None
         '''
-
+        self.opt = opt
         self.processor = processor
         self.pad_size = (128,86,136) #pad_size
         self.use_seg = opt.use_seg #use_seg
@@ -149,10 +149,48 @@ class VerSe(Dataset):
 
 
     def get_transformations(self):
+        # TODO do that like hyper parameeter optimization
+        # randmom translation and rotation
+        # random scaling to some degree
 
-        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
-                                   RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
-                                  ])
+        # Rand3DElastic transform in MONAI is used for data augmentation, particularly for volumetric medical images. It applies random 3D elastic deformations to images, which simulates biological variability and is often used to increase the diversity of your training dataset.
+
+        # Here are the key parameters for Rand3DElastic:
+
+        # prob: Probability of applying the transform. Default is 0.1.
+        # sigma_range: Range of Gaussian blurring of the displacement field, where a higher value indicates more blurring. The blur is used to smooth the random displacement fields which generate the elastic deformations. This is a tuple of two float values indicating the range.
+        # magnitude_range: Range of deformation magnitudes. This is a tuple of two float values indicating the range. The magnitude of the deformations applied is a key factor affecting the degree of deformation.
+        # spacing: This parameter controls the spacing between the control points which are used to define the elastic deformation field. The deformation field is a grid of vectors that dictate how the image is deformed. Lower spacing values will create more control points and generally more complex deformations.
+        # pad_mode: This mode determines how the edges of the input are treated during the transform. Options include "zeros" (default), "border", and "reflection".
+        # mode: This mode determines how the input array is interpolated. Options include "bilinear", "nearest", and "bicubic".
+        # rotate_range: Rotation range in radians. Can be a single float, or a tuple of floats specifying a different range for each axis.
+        # shear_range: Shear range in radians. Can be a single float, or a tuple of floats specifying a different range for each axis.
+        # translate_range: Translation range in voxels. Can be a single float, or a tuple of floats specifying a different range for each axis.
+        # scale_range: Scaling range. Can be a single float, or a tuple of floats specifying a different range for each axis. A scaling factor of 1.0 does not change the size, less than 1.0 reduces the size, and greater than 1.0 increases the size.
+        # The Rand3DElastic transform works by first creating a grid of vectors which represent the displacement of each pixel in the image. This grid is then blurred by a Gaussian filter (controlled by sigma_range), to generate a smoothly varying displacement field. This displacement field is then scaled by the deformation magnitude (magnitude_range), and applied to the image. This whole process results in an "elastic" deformation of the image.
+
+        # An important thing to note when using Rand3DElastic is that the extent of the deformations should be carefully controlled. Extreme deformations may result in unrealistic images that may negatively impact the performance of your model. It's recommended to use domain knowledge (in your case, knowledge about spinal CT images) to set the parameters appropriately.
+
+        # transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
+        #                             # random translation
+        #                             Rand3DElastic(prob = 0.5, sigma_range = (5, 8), magnitude_range = (0.1, 0.2), spatial_size = (128,86,136)),
+        #                            RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
+        #                           ])
+        
+        transformations = Compose([
+                                    CenterSpatialCrop(roi_size=[128,86,136]),
+                                    Rand3DElastic(
+                                        prob=0.5,
+                                        sigma_range=(5, 8),
+                                        magnitude_range=(100, 200),
+                                        rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
+                                        shear_range=self.opt.shear_range,  # Shear range
+                                        translate_range=self.opt.translate_range,  # Translation range
+                                        scale_range=(self.opt.scale_range[0], self.opt.scale_range[1])  # Scaling range
+                                        spatial_size=[128, 86, 136],
+                                    )
+                                ])
+
         return transformations
     
 

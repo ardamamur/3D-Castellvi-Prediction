@@ -4,6 +4,7 @@ from utils._prepare_data import DataHandler
 from dataset.VerSe import VerSe
 from torch.utils.data import DataLoader, random_split
 import torch
+from sklearn.model_selection import KFold
 
 
 class VerSeDataModule(pl.LightningDataModule):
@@ -18,6 +19,8 @@ class VerSeDataModule(pl.LightningDataModule):
         self.test_records = []
         self.weighted_sample = opt.weighted_sample
         self.num_workers = opt.num_workers
+        self.num_folds = 5
+        self.split_seed = 123
 
     def prepare_data(self):
         pass
@@ -27,27 +30,58 @@ class VerSeDataModule(pl.LightningDataModule):
         records = self.processor.verse_records
         print(f"Total records: {len(records)}")
 
-        if not self.opt.flip_all:
-            # # remove recorde if their flip value is 1 and castellvi value does not contain 'a' or 'b' inside it
-            records = [record for record in records if record["flip"] == 1 or ("a" in record["castellvi"] or "b" in record["castellvi"])] 
-            print(f"Total records after removing non-flipped records: {len(records)}")
+        if not self.opt.cross_validation:
 
-        for record in records:
-            if record["dataset_split"] == "train":
-                self.train_records.append(record)
-            elif record["dataset_split"] == "val":
-                self.val_records.append(record)
-            elif record["dataset_split"] == "test":
-                self.test_records.append(record)
-            else:
-                raise ValueError("Invalid split value {} in record: {}".format(record["dataset_split"], record["subject"]))
+            if not self.opt.flip_all:
+                # # remove recorde if their flip value is 1 and castellvi value does not contain 'a'
+                records = [record for record in records if record["flip"] == 1 and (record["castellvi"]!='2a' or record["castellvi"]!='3a')]
+                print("----------------------------------------------------------------------------------")
+                print(f"Total records after removing non-flipped records: {len(records)}")
+
+            for record in records:
+                if record["dataset_split"] == "train":
+                    self.train_records.append(record)
+                elif record["dataset_split"] == "val":
+                    self.val_records.append(record)
+                elif record["dataset_split"] == "test":
+                    self.test_records.append(record)
+                else:
+                    raise ValueError("Invalid split value {} in record: {}".format(record["dataset_split"], record["subject"]))
+                
+            if stage in {'fit', None}:
+                self.train_dataset = VerSe(self.opt, self.processor, self.train_records, training=True)
+                self.val_dataset = VerSe(self.opt, self.processor, self.val_records, training=False)
             
-        if stage in {'fit', None}:
-            self.train_dataset = VerSe(self.opt, self.processor, self.train_records, training=True)
-            self.val_dataset = VerSe(self.opt, self.processor, self.val_records, training=False)
+            if stage in {'test', None}:
+                self.train_dataset = VerSe(self.opt, self.processor, self.test_records, training=False)
         
-        if stage in {'test', None}:
-            self.train_dataset = VerSe(self.opt, self.processor, self.test_records, training=False)
+        else:
+            # get only records with split value of train and val
+            records = [record for record in records if record["dataset_split"] == "train" or record["dataset_split"] == "val"]
+            kf = KFold(n_splits = self.num_folds, shuffle = True, random_state = self.split_seed)
+
+            fold_datasets = []
+
+            for train_indexes, val_indexes in kf.split(records):
+                train_records = [records[i] for i in train_indexes]
+                val_records = [records[j] for j in val_indexes]
+
+                train_dataset = VerSe(self.opt, self.processor, train_records, training=True)
+                val_dataset = VerSe(self.opt, self.processor, val_records, training=False)
+
+                fold_datasets.append((train_dataset, val_dataset))
+
+            if stage == 'fit' or stage is None:
+                self.train_dataset, self.val_dataset = fold_datasets[self.current_fold]
+        
+    def set_current_fold(self, fold_index: int):
+        print("-----------------------------------------------------------")
+        self.current_fold = fold_index % self.num_folds
+        print(self.current_fold)
+        print("-----------------------------------------------------------")
+        self.setup(stage='fit')
+
+
 
     def _get_sampler(self, dataset):
         # Compute the true labels for each sample

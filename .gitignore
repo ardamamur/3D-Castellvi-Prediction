@@ -1,6 +1,7 @@
 # BIDS Toolbox
 bids/
 experiments/
+pretrained_weigths/
 runs/
 *.bak
 
