@@ -200,25 +200,24 @@ class VerSe(Dataset):
 
         # An important thing to note when using Rand3DElastic is that the extent of the deformations should be carefully controlled. Extreme deformations may result in unrealistic images that may negatively impact the performance of your model. It's recommended to use domain knowledge (in your case, knowledge about spinal CT images) to set the parameters appropriately.
 
-        # transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
-        #                             # random translation
-        #                             Rand3DElastic(prob = 0.5, sigma_range = (5, 8), magnitude_range = (0.1, 0.2), spatial_size = (128,86,136)),
-        #                            RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
-        #                           ])
+        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
+                                    # random translation
+                                   RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
+                                  ])
         
-        transformations = Compose([
-                                    CenterSpatialCrop(roi_size=[128,86,136]),
-                                    Rand3DElastic(
-                                        prob=0.5,
-                                        sigma_range=(5, 8),
-                                        magnitude_range=(100, 200),
-                                        rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
-                                        shear_range=self.opt.shear_range,  # Shear range
-                                        translate_range=self.opt.translate_range,  # Translation range
-                                        scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
-                                        spatial_size=[128, 86, 136],
-                                    )
-                                ])
+        # transformations = Compose([
+        #                             CenterSpatialCrop(roi_size=[128,86,136]),
+        #                             Rand3DElastic(
+        #                                 prob=0.5,
+        #                                 sigma_range=(5, 8),
+        #                                 magnitude_range=(100, 200),
+        #                                 rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
+        #                                 shear_range=self.opt.shear_range,  # Shear range
+        #                                 translate_range=self.opt.translate_range,  # Translation range
+        #                                 scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
+        #                                 spatial_size=[128, 86, 136],
+        #                             )
+        #                         ])
 
         return transformations
     

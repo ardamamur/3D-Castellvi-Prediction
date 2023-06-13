@@ -14,6 +14,7 @@ from modules.DenseNetModule_v2 import DenseNetV2
 def get_model_class(model_name:str):
     model_classes = {
         "resnet": ResNet,
+        "pretrained_resnet": ResNet,
         "densenet": DenseNet,
         "densenet_multi_mlp": DenseNetV2,
 
@@ -206,7 +207,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_devices', type=int, default=1)
     parser.add_argument('--manual_seed', type=int, default=1)
     parser.add_argument('--num_classes', type=int, default=3)
-    parser.add_argument('--port', type=int, default=6484)
+    parser.add_argument('--port', type=int, default=4961)
 
 
     parser.add_argument('--rotate_range', type=int, default=10)

@@ -31,7 +31,6 @@ class VerSeDataModule(pl.LightningDataModule):
         print(f"Total records: {len(records)}")
 
         if not self.opt.cross_validation:
-
             if not self.opt.flip_all:
                 # # remove recorde if their flip value is 1 and castellvi value does not contain 'a'
                 records = [record for record in records if record["flip"] == 1 and (record["castellvi"]!='2a' or record["castellvi"]!='3a')]
@@ -44,7 +43,7 @@ class VerSeDataModule(pl.LightningDataModule):
                 elif record["dataset_split"] == "val":
                     self.val_records.append(record)
                 elif record["dataset_split"] == "test":
-                    self.test_records.append(record)
+                    self.val_records.append(record)
                 else:
                     raise ValueError("Invalid split value {} in record: {}".format(record["dataset_split"], record["subject"]))
                 
