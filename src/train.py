@@ -215,6 +215,8 @@ if __name__ == '__main__':
 
 
     parser.add_argument('--use_seg', action='store_true')
+    parser.add_argument('--use_bin_seg', action='store_true')
+    parser.add_argument('--use_zero_out', action = 'store_true')
     parser.add_argument('--no_cuda', action='store_true')
     parser.add_argument('--weighted_sample', action='store_true')
     parser.add_argument('--weighted_loss', action='store_true')
@@ -225,10 +227,10 @@ if __name__ == '__main__':
 
 
     # Get Settings from config file
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/conf.yaml', help='Path to the configuration file')
-    args = parser.parse_args()
-    params = read_config(args.settings)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/conf.yaml', help='Path to the configuration file')
+    # args = parser.parse_args()
+    # params = read_config(args.settings)
     print(params)
 
     main(params=params)
