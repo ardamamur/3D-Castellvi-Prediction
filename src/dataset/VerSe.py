@@ -28,6 +28,8 @@ class VerSe(Dataset):
         self.processor = processor
         self.pad_size = (128,86,136) #pad_size
         self.use_seg = opt.use_seg #use_seg
+        self.use_bin_seg = opt.use_bin_seg
+        self.use_zero_out = opt.use_zero_out
         self.training = training
         self.classification_type = opt.classification_type 
         self.transformations = self.get_transformations()
@@ -58,6 +60,33 @@ class VerSe(Dataset):
         record = self.records[index] 
 
         img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+
+
+
+        ###Apply zeroing out and binarizing
+        if self.use_seg:
+            if self.use_zero_out:
+                l_idx = 25 if 25 in img else 24 if 24 in img else 23
+                l_mask = img == l_idx #create a mask for values belonging to lowest L
+                sac_mask = img == 26 #Sacrum is always denoted by value of 26
+                lsac_mask = (l_mask + sac_mask) != 0
+                img = img * lsac_mask
+
+            if self.use_bin_seg:
+                bin_mask = img != 0
+                img = bin_mask.astype(float)
+            
+
+        elif self.use_zero_out:
+            #We need the segmentation mask to create the boolean zero-out mask, TODO: Use seg-subreg mask in future for better details
+            seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+            l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
+            l_mask = seg == l_idx #create a mask for values belonging to lowest L
+            sac_mask = seg == 26 #Sacrum is always denoted by value of 26
+            lsac_mask = (l_mask + sac_mask) != 0
+            img = img * lsac_mask
+
+        
         if record["flip"]:
             print("subject_name:", record["subject"])
             img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
