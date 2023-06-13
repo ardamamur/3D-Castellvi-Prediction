@@ -67,16 +67,34 @@ export PYTHONWARNINGS="ignore"
 ## Cross validation
 #python3 train.py --use_seg --flip_all --cross_validation --classification_type right_side --model densenet --weighted_sample --num_classes 3
 
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 12
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 13
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 14
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 15
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 16
 
 ## Hyperparameter optimizationg for Data Augmentation
-python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 10 --shear_range 0.2 --translate_range 0.15 --scale_range 0.9 1.1
-python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 17
+# python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 10 --shear_range 0.2 --translate_range 0.15 --scale_range 0.9 1.1
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 17
 
-python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 15 --shear_range 0.2 --translate_range 0.20 --scale_range 0.9 1.1
-python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 18
+# python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 15 --shear_range 0.2 --translate_range 0.20 --scale_range 0.9 1.1
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 18
 
-python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --shear_range 0.2 --translate_range 0.25 --scale_range 0.9 1.1
-python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 19
+# python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --shear_range 0.2 --translate_range 0.25 --scale_range 0.9 1.1
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 19
 
-python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 5 --shear_range 0.2 --translate_range 0.10 --scale_range 0.9 1.1
-python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 20
+# python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 5 --shear_range 0.2 --translate_range 0.10 --scale_range 0.9 1.1
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 20
+
+
+## Test Special Cases
+# python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --master_list /data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V5.xlsx
+# python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 21
+
+
+# ResNet
+python3 train.py --use_seg --flip_all --classification_type right_side --model resnet --weighted_sample --num_classes 3
+python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --version_no 22
+
+python3 train.py --use_seg --flip_all --classification_type right_side --model pretrained_resnet --weighted_sample --num_classes 3
+python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --version_no 23

@@ -1,15 +1,11 @@
 from __future__ import annotations
-import argparse
-import typing
-import warnings
 import numpy as np
 import torch
 from torch import nn
 import pytorch_lightning as pl
 import torchmetrics.functional as mF
-from models.DenseNet3D import monai_dense169_3d
-from monai.networks.nets import EfficientNetBN, ResNet, resnet18
-from models.ResNet3D import create_pretrained_medical_resnet
+from src.models.pretrained_ResNet3D import *
+from src.models.ResNet3D import *
 from utils._get_model import _get_weights
 from torch.optim import lr_scheduler
 import pandas as pd
@@ -215,22 +211,24 @@ class ResNet(pl.LightningModule):
         Returns:
             modified and init network based on internal parameter
         """
-        from monai.networks.nets import ResNet, resnet101
-        if id == "resnet":
+        if id=='resnet':
+            network_func = resnet18
+            return network_func(pretrained=False,
+                                n_input_channels=1,
+                                spatial_dims=3,
+                                num_classes=self.num_classes)
+
+        elif id == "pretrained_resnet":
             # todo: add pretrained
-            # Load the model (let's assume you're using ResNet-50)
-            PATH_PRETRAINED_WEIGHTS = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/pretrained_weigths/resnet/resnet_101.pth"
-            net, pretraineds_layers = create_pretrained_medical_resnet(PATH_PRETRAINED_WEIGHTS, model_constructor=resnet101, num_classes=self.num_classes)
+            # Load the model (default resnet18)
+            PATH_PRETRAINED_WEIGHTS = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/pretrained_weigths/resnet/resnet_18.pth"
+            net, pretraineds_layers = create_pretrained_medical_resnet(PATH_PRETRAINED_WEIGHTS,
+                                                                       spatial_dims=3,
+                                                                       n_input_channels=1,
+                                                                       num_classes=self.num_classes)
             for n, param in net.named_parameters():
                 param.requires_grad = bool(n not in pretraineds_layers)
             return net
                         
-        else:
-            raise Exception("Not Implemented")
-        
-        num_classes = self.num_classes
-        #return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained)
-
-        
     def __str__(self):
         return f"{self.network_id}"
