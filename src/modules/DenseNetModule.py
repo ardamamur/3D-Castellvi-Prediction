@@ -37,7 +37,7 @@ class DenseNet(pl.LightningModule):
         self.softmax = nn.Softmax(dim=1)
 
         # TODO : Update masterlist parameter
-        if opt.classification_type == "right_side":
+        if opt.weighted_loss:
             weights = _get_weights(opt.master_list , rigth_side=True)
             weights = torch.tensor(weights).cuda()
             self.cross_entropy = nn.CrossEntropyLoss(weight=weights, reduction="mean")
@@ -173,6 +173,8 @@ class DenseNet(pl.LightningModule):
             self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
             self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
             self.logger.experiment.add_text("f1_p_cls", str(f1_p_cls.tolist()), self.current_epoch)
+
+            self.val_step_outputs = []
 
 
     @torch.no_grad()

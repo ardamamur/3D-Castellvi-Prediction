@@ -15,7 +15,7 @@ img_types:
   - 'cortex'
 
 # Path to the masterlist file
-master_list: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V3.xlsx'
+master_list: '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx'
 
 
 # Type of classification to be used
@@ -33,14 +33,29 @@ castellvi_classes:
   - '0'
 
 # Name of the model to be used
-model: 'densenet'
+model: densenet
 
 
 # Whether to use segmentation or not
 use_seg: False
 
+# Whether to convert seg mask to binary, if use_seg is True
+use_bin_seg: False
+
+# Whether to zero out the image parts not belonging to vertebrae
+use_zero_out: False
+
+# Whether to convert seg mask to binary, if use_seg is True
+use_bin_seg: False
+
+# Whether to zero out the image parts not belonging to vertebrae
+use_zero_out: False
+
 # Whether to use weighted sampling for equal label probabilities
-weighted_sample: False
+weighted_sample: True
+
+# Whether to use weighted loss or not
+weighted_loss: True
 
 # Phase of the project (train/test)
 phase: 'train'
@@ -76,7 +91,8 @@ n_epochs: 150
 resume_path: ''
 
 # Directory to save the experimental results
-experiments: '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/experiments'
+experiments: '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/experiments/'
+experiments: '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/experiments/'
 
 # Whether to use CUDA or not
 no_cuda: False
