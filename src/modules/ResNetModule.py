@@ -4,8 +4,8 @@ import torch
 from torch import nn
 import pytorch_lightning as pl
 import torchmetrics.functional as mF
-from src.models.pretrained_ResNet3D import *
-from src.models.ResNet3D import *
+from models.pretrained_ResNet3D import *
+from models.ResNet3D import *
 from utils._get_model import _get_weights
 from torch.optim import lr_scheduler
 import pandas as pd
@@ -212,8 +212,7 @@ class ResNet(pl.LightningModule):
             modified and init network based on internal parameter
         """
         if id=='resnet':
-            network_func = resnet18
-            return network_func(pretrained=False,
+            return resnet18(pretrained=False,
                                 n_input_channels=1,
                                 spatial_dims=3,
                                 num_classes=self.num_classes)

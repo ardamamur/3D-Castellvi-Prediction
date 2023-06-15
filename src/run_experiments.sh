@@ -93,8 +93,8 @@ export PYTHONWARNINGS="ignore"
 
 
 # ResNet
-python3 train.py --use_seg --flip_all --classification_type right_side --model resnet --weighted_sample --num_classes 3
-python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --version_no 22
+#python3 train.py --use_seg --flip_all --classification_type right_side --model resnet --weighted_sample --num_classes 3
+python3 eval_V2.py --use_seg --classification_type right_side --model resnet --num_classes 3 --version_no 0
 
-python3 train.py --use_seg --flip_all --classification_type right_side --model pretrained_resnet --weighted_sample --num_classes 3
-python3 eval_V2.py --use_seg --classification_type right_side --model densenet --num_classes 3 --version_no 23
+#python3 train.py --use_seg --flip_all --classification_type right_side --model pretrained_resnet --weighted_sample --num_classes 3
+python3 eval_V2.py --use_seg --classification_type right_side --model pretrained_resnet --num_classes 3 --version_no 0
