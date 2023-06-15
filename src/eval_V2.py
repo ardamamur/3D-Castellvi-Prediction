@@ -8,6 +8,7 @@ import re
 from utils._prepare_data import DataHandler, read_config
 from utils._get_model import *
 from modules.DenseNetModule import DenseNet
+from modules.ResNetModule import ResNet
 from dataset.VerSe import *
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
@@ -58,7 +59,12 @@ class Eval:
                     
     def load_model(self, path, params):
         checkpoint = torch.load(path)
-        model = DenseNet(opt=params, num_classes=self.num_classes, data_size=self.data_size, data_channel=1)
+        if params.model == 'densenet':
+            model = DenseNet(opt=params, num_classes=self.num_classes, data_size=self.data_size, data_channel=1)
+        elif params.model == 'resnet' or params.model == 'pretrained_resnet':
+            print('resnet')
+            model = ResNet(opt=params, num_classes=self.num_classes, data_size=self.data_size, data_channel=1)
+
         if params.weighted_loss:
             new_state_dict = {k: v for k, v in checkpoint['state_dict'].items() if k in model.state_dict()}
             model.load_state_dict(new_state_dict, strict=False)
