@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 from utils._prepare_data import DataHandler
-from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic
+from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic, RandAffine
 
 
 class VerSe(Dataset):
@@ -35,6 +35,8 @@ class VerSe(Dataset):
         self.transformations = self.get_transformations()
         self.test_transformations = self.get_test_transformations()
         self.records = records
+        self.use_bin_seg = opt.use_bin_seg
+        self.use_zero_out = opt.use_zero_out
 
 
     def __len__(self):
@@ -200,10 +202,10 @@ class VerSe(Dataset):
 
         # An important thing to note when using Rand3DElastic is that the extent of the deformations should be carefully controlled. Extreme deformations may result in unrealistic images that may negatively impact the performance of your model. It's recommended to use domain knowledge (in your case, knowledge about spinal CT images) to set the parameters appropriately.
 
-        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
-                                    # random translation
-                                   RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
-                                  ])
+        # transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
+        #                             # random translation
+        #                            RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
+        #                           ])
         
         # transformations = Compose([
         #                             CenterSpatialCrop(roi_size=[128,86,136]),
@@ -218,6 +220,13 @@ class VerSe(Dataset):
         #                                 spatial_size=[128, 86, 136],
         #                             )
         #                         ])
+
+        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
+                                  # Random Rotoation with degree 10
+                                  #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
+                                  # Random Translation with 10% probability
+                                  RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=0.5),
+                                  RandRotate)
 
         return transformations
     
