@@ -221,7 +221,9 @@ if __name__ == '__main__':
     parser.add_argument('--weighted_loss', action='store_true')
     parser.add_argument('--flip_all', action='store_true')
     parser.add_argument('--cross_validation', action='store_true')
-
+    parser.add_argument('--use_bin_seg', action='store_true')
+    parser.add_argument('--use_zero_out', action='store_true')
+    
     params = parser.parse_args()
 
 

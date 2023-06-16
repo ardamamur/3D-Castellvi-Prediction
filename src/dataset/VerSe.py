@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 from utils._prepare_data import DataHandler
-from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic
+from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic, RandAffine
 
 
 class VerSe(Dataset):
@@ -33,6 +33,8 @@ class VerSe(Dataset):
         self.transformations = self.get_transformations()
         self.test_transformations = self.get_test_transformations()
         self.records = records
+        self.use_bin_seg = opt.use_bin_seg
+        self.use_zero_out = opt.use_zero_out
 
 
     def __len__(self):
@@ -57,7 +59,34 @@ class VerSe(Dataset):
 
         record = self.records[index] 
 
-        img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+        img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size)
+
+        # Apply the zero out mask
+        if self.use_seg:
+            if self.use_zero_out:
+                l_idx = 25 if 25 in img else 24 if 24 in img else 23
+                l_mask = img == l_idx #create a mask for values belonging to lowest L
+                sac_mask = img == 26 #Sacrum is always denoted by value of 26
+                lsac_mask = (l_mask + sac_mask) != 0
+                img = img * lsac_mask
+
+            if self.use_bin_seg:
+                bin_mask = img != 0 # Create a binary mask by setting all non-zero values to 1
+                img = bin_mask.astype(float)
+
+
+        #If we are not using the segmentation mask, then we zero out the image based on the castellvi class
+        elif self.use_zero_out: 
+            # We need the segmentation mask to create the boolean zero-out mask
+            # TODO: Use seg-subreg mask in future for better details
+            seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+            l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
+            l_mask = seg == l_idx #create a mask for values belonging to lowest L
+            sac_mask = seg == 26 #Sacrum is always denoted by value of 26
+            lsac_mask = (l_mask + sac_mask) != 0
+            img = img * lsac_mask
+
+
         if record["flip"]:
             # Flip 2b and 3b labels and 0 cases
             print("subject_name:", record["subject"])
@@ -171,10 +200,10 @@ class VerSe(Dataset):
 
         # An important thing to note when using Rand3DElastic is that the extent of the deformations should be carefully controlled. Extreme deformations may result in unrealistic images that may negatively impact the performance of your model. It's recommended to use domain knowledge (in your case, knowledge about spinal CT images) to set the parameters appropriately.
 
-        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
-                                    # random translation
-                                   RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
-                                  ])
+        # transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
+        #                             # random translation
+        #                            RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
+        #                           ])
         
         # transformations = Compose([
         #                             CenterSpatialCrop(roi_size=[128,86,136]),
@@ -189,6 +218,13 @@ class VerSe(Dataset):
         #                                 spatial_size=[128, 86, 136],
         #                             )
         #                         ])
+
+        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
+                                  # Random Rotoation with degree 10
+                                  #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
+                                  # Random Translation with 10% probability
+                                  RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=0.5),
+                                  RandRotate)
 
         return transformations
     

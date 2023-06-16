@@ -93,8 +93,31 @@ export PYTHONWARNINGS="ignore"
 
 
 # ResNet
-#python3 train.py --use_seg --flip_all --classification_type right_side --model resnet --weighted_sample --num_classes 3
-python3 eval_V2.py --use_seg --classification_type right_side --model resnet --num_classes 3 --version_no 0
+# #python3 train.py --use_seg --flip_all --classification_type right_side --model resnet --weighted_sample --num_classes 3
+# python3 eval_V2.py --use_seg --classification_type right_side --model resnet --num_classes 3 --version_no 0
 
-#python3 train.py --use_seg --flip_all --classification_type right_side --model pretrained_resnet --weighted_sample --num_classes 3
-python3 eval_V2.py --use_seg --classification_type right_side --model pretrained_resnet --num_classes 3 --version_no 0
+# #python3 train.py --use_seg --flip_all --classification_type right_side --model pretrained_resnet --weighted_sample --num_classes 3
+# python3 eval_V2.py --use_seg --classification_type right_side --model pretrained_resnet --num_classes 3 --version_no 0
+
+
+
+
+############################ HPO FOR DATA AUGMENTATION ##########################################
+python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --translate_range 0.2 # version_22
+python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 40 --translate_range 0.2 # version_23
+python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 60 --translate_range 0.2 # version_24
+python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --translate_range 0.2 # version_25
+python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --translate_range 0.4 # version_26
+python3 train.py --use_seg --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --translate_range 0.6 # version_27
+
+############################ HPO FOR DATA ZEROING_OUT ##########################################
+
+########## SEG IMAGES #########
+python3 train.py --use_seg --use_bin_seg --use_zero_out --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --translate_range 0.2 # version_28
+python3 train.py --use_seg --use_bin_seg --use_zero_out --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 40 --translate_range 0.2 # version_29
+python3 train.py --use_seg --use_bin_seg --use_zero_out --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 60 --translate_range 0.2 # version_30
+
+########## NON-SEG IMAGES ######
+python3 train.py --use_zero_out --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 20 --translate_range 0.2 # version_31
+python3 train.py --use_zero_out --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 40 --translate_range 0.2 # version_32
+python3 train.py --use_zero_out --flip_all --classification_type right_side --model densenet --weighted_sample --num_classes 3 --rotate_range 60 --translate_range 0.2 # version_33
