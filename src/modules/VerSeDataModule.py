@@ -5,7 +5,7 @@ from dataset.VerSe import VerSe
 from torch.utils.data import DataLoader, random_split
 import torch
 from sklearn.model_selection import KFold
-
+import os
 
 class VerSeDataModule(pl.LightningDataModule):
 
@@ -61,24 +61,49 @@ class VerSeDataModule(pl.LightningDataModule):
             kf = KFold(n_splits = self.num_folds, shuffle = True, random_state = self.split_seed)
 
             fold_datasets = []
-
+            count = 0
             for train_indexes, val_indexes in kf.split(records):
+                print(count)
                 train_records = [records[i] for i in train_indexes]
                 val_records = [records[j] for j in val_indexes]
+                
+                train_records_subject_name = []
+                val_records_subject_name = []
+                for record in train_records:
+                    train_records_subject_name.append([record['subject'], record["flip"]])
+                for record in val_records:
+                    val_records_subject_name.append([record['subject'] , record["flip"]])
 
                 train_dataset = VerSe(self.opt, self.processor, train_records, training=True)
                 val_dataset = VerSe(self.opt, self.processor, val_records, training=False)
+                
+                # Don't forget to change path
+                train_file_name = '/u/home/ank/3D-Castellvi-Prediction/src/dataset/' + "fold" + str(count) + "_train" 
+                val_file_name = '/u/home/ank/3D-Castellvi-Prediction/src/dataset/' + "fold" + str(count) + "_val"
+
+                with open(train_file_name, 'w') as fp:
+                    for item in train_records_subject_name:
+                        fp.write("%s,%s\n" % (item[0],item[1]))
+                
+                with open(val_file_name, 'w') as fp:
+                    for item in val_records_subject_name:
+                        fp.write("%s,%s\n" % (item[0],item[1]))
+                        
 
                 fold_datasets.append((train_dataset, val_dataset))
+                count +=1
+                
+        
 
+            
             if stage == 'fit' or stage is None:
                 self.train_dataset, self.val_dataset = fold_datasets[self.current_fold]
+            
+            
         
     def set_current_fold(self, fold_index: int):
-        print("-----------------------------------------------------------")
+        
         self.current_fold = fold_index % self.num_folds
-        print(self.current_fold)
-        print("-----------------------------------------------------------")
         self.setup(stage='fit')
 
 
