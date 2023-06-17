@@ -130,13 +130,14 @@ def main(params):
             print(k)
             print('--------------------------------------')
 
-
+            
             verse_data_module = VerSeDataModule(opt=params, processor=processor)
             verse_data_module.set_current_fold( fold_index = k)
 
             model, trainer = run_cross_validation(params , k)
-
+            
             # Fit the model for the current fold
+
             trainer.fit(model, verse_data_module)
 
 
@@ -180,7 +181,7 @@ if __name__ == '__main__':
     else:
         print('Running on CPU')
 
-
+    
     parser = argparse.ArgumentParser(description='Training settings')
     parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20'])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
@@ -198,9 +199,9 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--save_intervals', type=int, default=10)
-    parser.add_argument('--n_epochs', type=int, default=150)
+    parser.add_argument('--n_epochs', type=int, default=1)
     parser.add_argument('--resume_path', default='')
-    parser.add_argument('--experiments', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments')
+    parser.add_argument('--experiments', default='/u/home/ank/3D-Castellvi-Prediction/experiments')
     parser.add_argument('--gpu_id', default='3')
     parser.add_argument('--n_devices', type=int, default=1)
     parser.add_argument('--manual_seed', type=int, default=1)
@@ -226,12 +227,12 @@ if __name__ == '__main__':
     params = parser.parse_args()
 
 
-    # Get Settings from config file
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/conf.yaml', help='Path to the configuration file')
-    # args = parser.parse_args()
-    # params = read_config(args.settings)
-    print(params)
+    """#Get Settings from config file
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--settings', type=str, default='/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/settings.yaml', help='Path to the configuration file')
+    args = parser.parse_args()
+    params = read_config(args.settings)
+    print(params)"""
 
     main(params=params)
 
