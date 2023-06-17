@@ -113,6 +113,7 @@ def main(params):
         trainer.fit(model, verse_data_module)
 
     else:
+        print("Cross validation")
         experiment = params.experiments + '/baseline_models/'  + params.model
         try:
             tb = start_tensorboard(params.port, experiment + '/lightning_logs' ) 
@@ -214,6 +215,7 @@ if __name__ == '__main__':
     parser.add_argument('--shear_range', type=float, default=0.2)
     parser.add_argument('--translate_range', type=float, default=0.15)
     parser.add_argument('--scale_range', nargs='+', default=[0.9, 1.1])
+    parser.add_argument('--aug_prob', type=float, default=0.5)
 
 
     parser.add_argument('--use_seg', action='store_true')

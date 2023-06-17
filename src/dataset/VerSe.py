@@ -225,7 +225,7 @@ class VerSe(Dataset):
                                   # Random Rotoation with degree 10
                                   #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
                                   # Random Translation with 10% probability
-                                  RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=0.5),
+                                  RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=self.opt.aug_prob),
                                   RandRotate)
 
         return transformations
