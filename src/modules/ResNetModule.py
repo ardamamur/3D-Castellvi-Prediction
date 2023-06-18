@@ -78,6 +78,38 @@ class ResNet(pl.LightningModule):
             self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
             self.training_step_outputs = []  # Clear the outputs at the end of each epoch
 
+        if self.opt.model == 'pretrained_resnet' and self.opt.gradual_freezing:
+            # Gradual Freezing 
+
+            # A common approach is to start by training only the last layers for a certain number of epochs, 
+            # then gradually unfreeze earlier layers and continue training. For instance, you might do something like this:
+
+            # Train only the last layer for 20 epochs.
+            # Unfreeze and train the last two layers for the next 20 epochs.
+            # Unfreeze and train the last three layers for the next 20 epochs.
+            # And so on...
+            # Ultimately, the schedule for layer unfreezing is a hyperparameter of your training process 
+            # that you may need to tune based on your specific task.
+
+            # Get the current epoch
+            epoch = self.current_epoch
+
+            # Specify the layers to unfreeze at each epoch
+            layers_to_unfreeze = {
+                30: ["layer4", "layer3"],
+                60: ["layer2", "layer1"],
+                90: ["bn1", "relu", "maxpool", "conv1"],
+            }
+
+            # Unfreeze layers
+            if epoch in layers_to_unfreeze:
+                for layer_name in layers_to_unfreeze[epoch]:
+                    for name, child in self.network.named_children():
+                        if name == layer_name:
+                            print(f"Unfreezing {name}")
+                            for param in child.parameters():
+                                param.requires_grad = True
+
 
     def configure_optimizers(self) -> dict:
         
@@ -220,13 +252,13 @@ class ResNet(pl.LightningModule):
         elif id == "pretrained_resnet":
             # todo: add pretrained
             # Load the model (default resnet18)
-            PATH_PRETRAINED_WEIGHTS = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/pretrained_weigths/resnet/resnet_18.pth"
-            net, pretraineds_layers = create_pretrained_medical_resnet(PATH_PRETRAINED_WEIGHTS,
-                                                                       spatial_dims=3,
-                                                                       n_input_channels=1,
-                                                                       num_classes=self.num_classes)
-            for n, param in net.named_parameters():
-                param.requires_grad = bool(n not in pretraineds_layers)
+            net = create_pretrained_medical_resnet(model_type=self.opt.model_type,
+                                                    spatial_dims=3,
+                                                    n_input_channels=1,
+                                                    num_classes=self.num_classes)
+            # for n, param in net.named_parameters():
+            #     param.requires_grad = bool(n not in pretraineds_layers)
+            # return net
             return net
                         
     def __str__(self):

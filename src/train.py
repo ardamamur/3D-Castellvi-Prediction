@@ -195,7 +195,7 @@ if __name__ == '__main__':
     parser.add_argument('--phase', default='train')
     parser.add_argument('--scheduler', default='ReduceLROnPlateau')
     parser.add_argument('--optimizer', default='AdamW')
-    parser.add_argument('--learning_rate', type=float, default=0.001)
+    parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--total_iterations', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=8)
@@ -208,7 +208,8 @@ if __name__ == '__main__':
     parser.add_argument('--n_devices', type=int, default=1)
     parser.add_argument('--manual_seed', type=int, default=1)
     parser.add_argument('--num_classes', type=int, default=3)
-    parser.add_argument('--port', type=int, default=4961)
+    parser.add_argument('--port', type=int, default=1999)
+    parser.add_argument('--model_type', type=str, default='')
 
 
     parser.add_argument('--rotate_range', type=int, default=10)
@@ -228,7 +229,8 @@ if __name__ == '__main__':
     parser.add_argument('--cross_validation', action='store_true')
     parser.add_argument('--use_bin_seg', action='store_true')
     parser.add_argument('--use_zero_out', action='store_true')
-    
+    parser.add_argument('--gradual_freezing', action='store_true')
+    parser.add_argument('--elastic_transform', action='store_true')
     params = parser.parse_args()
 
 

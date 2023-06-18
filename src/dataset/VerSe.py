@@ -207,26 +207,29 @@ class VerSe(Dataset):
         #                            RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
         #                           ])
         
-        # transformations = Compose([
-        #                             CenterSpatialCrop(roi_size=[128,86,136]),
-        #                             Rand3DElastic(
-        #                                 prob=0.5,
-        #                                 sigma_range=(5, 8),
-        #                                 magnitude_range=(100, 200),
-        #                                 rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
-        #                                 shear_range=self.opt.shear_range,  # Shear range
-        #                                 translate_range=self.opt.translate_range,  # Translation range
-        #                                 scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
-        #                                 spatial_size=[128, 86, 136],
-        #                             )
-        #                         ])
+        if self.opt.elastic_transform:
 
-        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
-                                  # Random Rotoation with degree 10
-                                  #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
-                                  # Random Translation with 10% probability
-                                  RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=self.opt.aug_prob),
-                                  RandRotate)
+            transformations = Compose([
+                                        CenterSpatialCrop(roi_size=[128,86,136]),
+                                        Rand3DElastic(
+                                            prob=0.5,
+                                            sigma_range=(5, 8),
+                                            magnitude_range=(100, 200),
+                                            rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
+                                            shear_range=self.opt.shear_range,  # Shear range
+                                            translate_range=self.opt.translate_range,  # Translation range
+                                            scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
+                                            spatial_size=[128, 86, 136],
+                                        )
+                                    ])
+        else:
+
+            transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
+                                    # Random Rotoation with degree 10
+                                    #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
+                                    # Random Translation with 10% probability
+                                    RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=self.opt.aug_prob),
+                                    RandRotate)
 
         return transformations
     
