@@ -105,7 +105,7 @@ class VerSeDataModule(pl.LightningDataModule):
         weights = weights.tolist()
     
 
-        sampler = torch.utils.data.WeightedRandomSampler(weights, len(dataset))
+        sampler = torch.utils.data.WeightedRandomSampler(weights, 2*len(dataset), relacement=True)
         return sampler
 
 
