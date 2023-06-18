@@ -203,7 +203,7 @@ class ResNet(pl.LightningModule):
             self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
             self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
             self.logger.experiment.add_text("f1_p_cls", str(f1_p_cls.tolist()), self.current_epoch)
-
+            self.val_step_outputs = []
 
     @torch.no_grad()
     def cat_metrics(self, outputs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
