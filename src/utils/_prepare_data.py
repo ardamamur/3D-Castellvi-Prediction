@@ -206,7 +206,7 @@ class DataHandler:
         filepath_ct = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
 
         if os.path.isfile(filepath_seg + ".npy") and os.path.isfile(filepath_ct + ".npy") and skip_existing:
-            logging.info("Skipping existing cutouts of subject {}".format(record["subject"]))
+            #logging.info("Skipping existing cutouts of subject {}".format(record["subject"]))
             if return_seg:
                 return(np.load(file=filepath_seg + ".npy"))
             else:
