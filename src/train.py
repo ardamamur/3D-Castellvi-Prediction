@@ -220,8 +220,6 @@ if __name__ == '__main__':
 
 
     parser.add_argument('--use_seg', action='store_true')
-    parser.add_argument('--use_bin_seg', action='store_true')
-    parser.add_argument('--use_zero_out', action = 'store_true')
     parser.add_argument('--no_cuda', action='store_true')
     parser.add_argument('--weighted_sample', action='store_true')
     parser.add_argument('--weighted_loss', action='store_true')
