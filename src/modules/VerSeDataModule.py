@@ -44,6 +44,7 @@ class VerSeDataModule(pl.LightningDataModule):
                     self.val_records.append(record)
                 elif record["dataset_split"] == "test":
                     self.val_records.append(record)
+                    self.val_records.append(record)
                 else:
                     raise ValueError("Invalid split value {} in record: {}".format(record["dataset_split"], record["subject"]))
                 
