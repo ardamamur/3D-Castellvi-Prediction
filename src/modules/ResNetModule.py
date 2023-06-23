@@ -1,15 +1,11 @@
 from __future__ import annotations
-import argparse
-import typing
-import warnings
 import numpy as np
 import torch
 from torch import nn
 import pytorch_lightning as pl
 import torchmetrics.functional as mF
-from models.DenseNet3D import monai_dense169_3d
-from monai.networks.nets import EfficientNetBN, ResNet, resnet18
-from models.ResNet3D import create_pretrained_medical_resnet
+from models.pretrained_ResNet3D import *
+from models.ResNet3D import *
 from utils._get_model import _get_weights
 from torch.optim import lr_scheduler
 import pandas as pd
@@ -81,6 +77,38 @@ class ResNet(pl.LightningModule):
             self.logger.experiment.add_scalar("train_cohen_acc", acc, self.current_epoch)
             self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
             self.training_step_outputs = []  # Clear the outputs at the end of each epoch
+
+        if self.opt.model == 'pretrained_resnet' and self.opt.gradual_freezing:
+            # Gradual Freezing 
+
+            # A common approach is to start by training only the last layers for a certain number of epochs, 
+            # then gradually unfreeze earlier layers and continue training. For instance, you might do something like this:
+
+            # Train only the last layer for 20 epochs.
+            # Unfreeze and train the last two layers for the next 20 epochs.
+            # Unfreeze and train the last three layers for the next 20 epochs.
+            # And so on...
+            # Ultimately, the schedule for layer unfreezing is a hyperparameter of your training process 
+            # that you may need to tune based on your specific task.
+
+            # Get the current epoch
+            epoch = self.current_epoch
+
+            # Specify the layers to unfreeze at each epoch
+            layers_to_unfreeze = {
+                30: ["layer4", "layer3"],
+                60: ["layer2", "layer1"],
+                90: ["bn1", "relu", "maxpool", "conv1"],
+            }
+
+            # Unfreeze layers
+            if epoch in layers_to_unfreeze:
+                for layer_name in layers_to_unfreeze[epoch]:
+                    for name, child in self.network.named_children():
+                        if name == layer_name:
+                            print(f"Unfreezing {name}")
+                            for param in child.parameters():
+                                param.requires_grad = True
 
 
     def configure_optimizers(self) -> dict:
@@ -175,7 +203,7 @@ class ResNet(pl.LightningModule):
             self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
             self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
             self.logger.experiment.add_text("f1_p_cls", str(f1_p_cls.tolist()), self.current_epoch)
-
+            self.val_step_outputs = []
 
     @torch.no_grad()
     def cat_metrics(self, outputs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -215,22 +243,23 @@ class ResNet(pl.LightningModule):
         Returns:
             modified and init network based on internal parameter
         """
-        from monai.networks.nets import ResNet, resnet101
-        if id == "resnet":
+        if id=='resnet':
+            return resnet18(pretrained=False,
+                                n_input_channels=1,
+                                spatial_dims=3,
+                                num_classes=self.num_classes)
+
+        elif id == "pretrained_resnet":
             # todo: add pretrained
-            # Load the model (let's assume you're using ResNet-50)
-            PATH_PRETRAINED_WEIGHTS = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/pretrained_weigths/resnet/resnet_101.pth"
-            net, pretraineds_layers = create_pretrained_medical_resnet(PATH_PRETRAINED_WEIGHTS, model_constructor=resnet101, num_classes=self.num_classes)
-            for n, param in net.named_parameters():
-                param.requires_grad = bool(n not in pretraineds_layers)
+            # Load the model (default resnet18)
+            net = create_pretrained_medical_resnet(model_type=self.opt.model_type,
+                                                    spatial_dims=3,
+                                                    n_input_channels=1,
+                                                    num_classes=self.num_classes)
+            # for n, param in net.named_parameters():
+            #     param.requires_grad = bool(n not in pretraineds_layers)
+            # return net
             return net
                         
-        else:
-            raise Exception("Not Implemented")
-        
-        num_classes = self.num_classes
-        #return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained)
-
-        
     def __str__(self):
         return f"{self.network_id}"

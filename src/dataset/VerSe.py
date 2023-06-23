@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 from utils._prepare_data import DataHandler
-from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic
-from scipy import ndimage
+from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic, RandAffine
+
 
 
 class VerSe(Dataset):
@@ -36,6 +36,8 @@ class VerSe(Dataset):
         self.transformations = self.get_transformations()
         self.test_transformations = self.get_test_transformations()
         self.records = records
+        self.use_bin_seg = opt.use_bin_seg
+        self.use_zero_out = opt.use_zero_out
 
 
     def __len__(self):
@@ -205,23 +207,32 @@ class VerSe(Dataset):
 
         # transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136]),
         #                             # random translation
-        #                             Rand3DElastic(prob = 0.5, sigma_range = (5, 8), magnitude_range = (0.1, 0.2), spatial_size = (128,86,136)),
         #                            RandRotate(range_x = 0.2, range_y = 0.2, range_z = 0.2, prob = 0.5)
         #                           ])
         
-        transformations = Compose([
-                                    CenterSpatialCrop(roi_size=[128,86,136]),
-                                    Rand3DElastic(
-                                        prob=0.5,
-                                        sigma_range=(5, 8),
-                                        magnitude_range=(100, 200),
-                                        rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
-                                        shear_range=self.opt.shear_range,  # Shear range
-                                        translate_range=self.opt.translate_range,  # Translation range
-                                        scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
-                                        spatial_size=[128, 86, 136],
-                                    )
-                                ])
+        if self.opt.elastic_transform:
+
+            transformations = Compose([
+                                        CenterSpatialCrop(roi_size=[128,86,136]),
+                                        Rand3DElastic(
+                                            prob=0.5,
+                                            sigma_range=(5, 8),
+                                            magnitude_range=(100, 200),
+                                            rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
+                                            shear_range=self.opt.shear_range,  # Shear range
+                                            translate_range=self.opt.translate_range,  # Translation range
+                                            scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
+                                            spatial_size=[128, 86, 136],
+                                        )
+                                    ])
+        else:
+
+            transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
+                                    # Random Rotoation with degree 10
+                                    #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
+                                    # Random Translation with 10% probability
+                                    RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=self.opt.aug_prob),
+                                    RandRotate)
 
         return transformations
     
