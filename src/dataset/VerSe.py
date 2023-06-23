@@ -5,6 +5,7 @@ from utils._prepare_data import DataHandler
 from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic, RandAffine
 
 
+
 class VerSe(Dataset):
     def __init__(self, opt, processor:DataHandler, records, training=True) -> None:
 
@@ -72,6 +73,7 @@ class VerSe(Dataset):
                 l_mask = img == l_idx #create a mask for values belonging to lowest L
                 sac_mask = img == 26 #Sacrum is always denoted by value of 26
                 lsac_mask = (l_mask + sac_mask) != 0
+                lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
                 img = img * lsac_mask
 
             if self.use_bin_seg:
@@ -86,6 +88,7 @@ class VerSe(Dataset):
             l_mask = seg == l_idx #create a mask for values belonging to lowest L
             sac_mask = seg == 26 #Sacrum is always denoted by value of 26
             lsac_mask = (l_mask + sac_mask) != 0
+            lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
             img = img * lsac_mask
 
         
