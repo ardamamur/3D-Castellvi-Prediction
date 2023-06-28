@@ -105,7 +105,7 @@ class DataHandler:
 
         return record
 
-    def _create_tri_record(self, sub, ce, castellvi, last_l, side):
+    def _create_tri_record(self, sub, ce, castellvi, last_l, side, dataset_split, flip):
         record = {}
         record["dataset"] = "tri"
 
@@ -140,6 +140,8 @@ class DataHandler:
         record["castellvi"] = castellvi
         record["last_l"] = last_l
         record["side"] = side
+        record["dataset_split"] = dataset_split
+        record["flip"] = flip
 
         return record
         

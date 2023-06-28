@@ -185,10 +185,10 @@ if __name__ == '__main__':
 
     
     parser = argparse.ArgumentParser(description='Training settings')
-    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20'])
+    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
+    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/Castellvi_list_v2.xlsx')
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_intervals', type=int, default=10)
     parser.add_argument('--n_epochs', type=int, default=1)
     parser.add_argument('--resume_path', default='')
-    parser.add_argument('--experiments', default='/u/home/ank/3D-Castellvi-Prediction/experiments')
+    parser.add_argument('--experiments', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet')
     parser.add_argument('--gpu_id', default='3')
     parser.add_argument('--n_devices', type=int, default=1)
     parser.add_argument('--manual_seed', type=int, default=1)

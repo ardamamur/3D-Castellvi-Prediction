@@ -91,7 +91,9 @@ class Eval:
     
     def get_records(self, processor, test_subjects):
         test_records = []
-        records = processor.verse_records
+        verse_records = processor.verse_records
+        tri_records = processor.tri_records
+        records = verse_records + tri_records
         # return speicific indexes of records that are in test_subjects
         for index in range(len(records)):
             if index in test_subjects:
@@ -122,7 +124,7 @@ class Eval:
         eval_results = []
 
         # Check if eval_results file exists and load it
-        eval_file_path = self.opt.experiments + "/baseline_models/" + self.opt.model + "/eval_results.json"
+        eval_file_path = self.opt.experiments + "/baseline_models/" + self.opt.model + "/eval_results_cttri.json"
         if os.path.exists(eval_file_path):
             with open(eval_file_path, 'r') as f:
                 eval_results = json.load(f)
@@ -281,10 +283,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluation settings')
 
     parser = argparse.ArgumentParser(description='Evaluation settings')
-    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20'])
+    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
+    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/Castellvi_list_v2.xlsx')
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
