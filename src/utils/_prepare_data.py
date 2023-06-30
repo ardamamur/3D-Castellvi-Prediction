@@ -39,7 +39,7 @@ class DataHandler:
                 verse_record = self._create_verse_record(sub, split, castellvi, last_l, side, dataset_split, flip)
                 self.verse_records.append(verse_record)
             elif dataset == "tri":
-                tri_record = self._create_tri_record(sub, ce, castellvi, last_l, side)
+                tri_record = self._create_tri_record(sub, ce, castellvi, last_l, split, side, dataset_split, flip)
                 self.tri_records.append(tri_record)
 
     
@@ -105,7 +105,7 @@ class DataHandler:
 
         return record
 
-    def _create_tri_record(self, sub, ce, castellvi, last_l, side, dataset_split, flip):
+    def _create_tri_record(self, sub, ce, castellvi, last_l, split, side, dataset_split, flip):
         record = {}
         record["dataset"] = "tri"
 
@@ -135,6 +135,7 @@ class DataHandler:
         record["raw_file"] = raw_file
         record["seg_file"] = seg_file
         record["ctd_file"] = ctd_file
+        record['split'] = split
 
 
         record["castellvi"] = castellvi

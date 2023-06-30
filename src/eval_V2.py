@@ -78,7 +78,7 @@ class Eval:
         #masterlist = masterlist.loc[masterlist['Split'] == 'test'] # extract test subjects
         masterlist = masterlist[masterlist['Split'].isin(['test', 'val'])]
         masterlist = masterlist.loc[masterlist['Flip'] == 0] # extract subjects with Flip = 0
-        test_subjects = masterlist.index.tolist()
+        test_subjects = masterlist["Full_Id"].tolist()
         return test_subjects
     
     def get_processor(self):
@@ -92,13 +92,29 @@ class Eval:
     def get_records(self, processor, test_subjects):
         test_records = []
         verse_records = processor.verse_records
+        #print(verse_records[0])
         tri_records = processor.tri_records
-        records = verse_records + tri_records
+        #print(tri_records[0])
+        # combine tri and verse dictionaries
+        #records = tri_records.copy()
+        #records.update(verse_records)
         # return speicific indexes of records that are in test_subjects
+        records = verse_records + tri_records
+        #print(test_subjects)
+        #print(records.keys())
         for index in range(len(records)):
-            if index in test_subjects:
-                test_records.append(records[index])
-
+            record = records[index]
+            # check if any element in test subhjects contains the subject in record
+            if any(record['subject'] in s for s in test_subjects):
+                if 'verse' in record['subject']:
+                    if record['flip'] == 0:
+                        print(record['subject'])
+                        test_records.append(record)
+                    else:
+                        continue
+                else:
+                    continue
+        print(len(test_records))
         return test_records
     
     def get_predictions(self, model, version_number):
@@ -139,8 +155,8 @@ class Eval:
 
 
             ###Apply zeroing out and binarizing
-            if self.use_seg:
-                if self.use_zero_out:
+            if self.opt.use_seg:
+                if self.opt.use_zero_out:
                     l_idx = 25 if 25 in img else 24 if 24 in img else 23
                     l_mask = img == l_idx #create a mask for values belonging to lowest L
                     sac_mask = img == 26 #Sacrum is always denoted by value of 26
@@ -148,12 +164,12 @@ class Eval:
                     lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
                     img = img * lsac_mask
 
-                if self.use_bin_seg:
+                if self.opt.use_bin_seg:
                     bin_mask = img != 0
                     img = bin_mask.astype(float)
                 
 
-            elif self.use_zero_out:
+            elif self.opt.use_zero_out:
                 #We need the segmentation mask to create the boolean zero-out mask, TODO: Use seg-subreg mask in future for better details
                 seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
                 l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
