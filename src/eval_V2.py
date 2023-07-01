@@ -1,19 +1,33 @@
-import sys
-sys.path.append('/data1/practical-sose23/castellvi/castellvi_prediction/bids')
-import torch
 import os
-import argparse
-import json
 import re
-from utils._prepare_data import DataHandler, read_config
+import sys
+import json
+import argparse
+import numpy as np
+import pandas as pd
+import torch.nn as nn
+from utils._prepare_data import DataHandler
+from sklearn.metrics import f1_score
+from modules.DenseNetModule import DenseNet
+from modules.ResNetModule import ResNet
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+from dataset.VerSe import *
+from utils._get_model import *
+from sklearn.metrics import ConfusionMatrixDisplay
+
+# Append path to import custom modules
+sys.path.append('/data1/practical-sose23/castellvi/castellvi_prediction/bids')
+
+
+# Custom module imports
+from utils._prepare_data import DataHandler
 from utils._get_model import *
 from modules.DenseNetModule import DenseNet
 from modules.ResNetModule import ResNet
 from dataset.VerSe import *
-from sklearn.metrics import f1_score
-from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+
 
 class Eval:
     def __init__(self, opt) -> None:
@@ -158,21 +172,6 @@ class Eval:
         y_true = []
         eval_results = []
 
-        right_side_mapping = {
-            '0': '0',
-            '2a': '2',
-            '2b': '2',
-            '3a': '3',
-            '3b': '3'
-        }
-
-
-        pred_side_mapping = {
-            '2': '3',
-            '1': '2',
-            '0': '0'
-        }
-
         # Check if eval_results file exists and load it
         eval_file_path = self.opt.experiments + "/baseline_models/" + self.opt.model + "/eval_results_verse.json"
         if os.path.exists(eval_file_path):
@@ -261,41 +260,44 @@ class Eval:
                 y_pred.append(pred_cls)
 
             acutal_r = None
-            pred_r = pred_side_mapping[pred_cls_1]
-            pred_flip_r = pred_side_mapping[pred_cls_2]
+            pred_r = self.get_label_map(map='output_class')[pred_cls_1]
+            pred_flip_r = self.get_label_map(map='otuput_class')[pred_cls_2]
 
             if record['side'] == 'R':
                 if label == '4':
-                    acutal_r = right_side_mapping['3a']
-                    actual_flip_r = right_side_mapping['2a']
+                    acutal_r = self.get_label_map(map='side_class')['3a']
+                    actual_flip_r = self.get_label_map(map='side_class')['2a']
                 elif label == '3a' or label == '2a':
-                    acutal_r = right_side_mapping[label]
-                    actual_flip_r = right_side_mapping['0']
+                    acutal_r = self.get_label_map(map='side_class')[label]
+                    actual_flip_r = self.get_label_map(map='side_class')['0']
                 else:
-                    acutal_r = right_side_mapping[label]
-                    actual_flip_r = right_side_mapping[label]
+                    acutal_r = self.get_label_map(map='side_class')[label]
+                    actual_flip_r = self.get_label_map(map='side_class')[label]
             else:
                 if label == '4':
-                    acutal_r = right_side_mapping['2a']
-                    actual_flip_r = right_side_mapping['3a']
+                    acutal_r = self.get_label_map(map='side_class')['2a']
+                    actual_flip_r = self.get_label_map(map='side_class')['3a']
 
                 elif label == '3a' or label == '2a':
-                    acutal_r = right_side_mapping['0']
-                    actual_flip_r = right_side_mapping[label]
+                    acutal_r = self.get_label_map(map='side_class')['0']
+                    actual_flip_r = self.get_label_map(map='side_class')[label]
                 else:
-                    acutal_r = right_side_mapping[label]     
-                    actual_flip_r = right_side_mapping[label]       
+                    acutal_r = self.get_label_map(map='side_class')[label]     
+                    actual_flip_r = self.get_label_map(map='side_class')[label]       
 
              # Update eval_results_dict
-            subject_results = eval_results_dict.get(record['subject'], {
-                'subject_name': record['subject'],
-                'actual': label,
-                'actual_R' : acutal_r,
-                'actual_flip_R' : actual_flip_r,
-                'pred': {},
-                'pred_R': {},
-                'pred_flip_R': {},
-            })
+            subject_results = eval_results_dict.get(
+                record['subject'], 
+                {
+                    'subject_name': record['subject'],
+                    'actual': label,
+                    'actual_R' : acutal_r,
+                    'actual_flip_R' : actual_flip_r,
+                    'pred': {},
+                    'pred_R': {},
+                    'pred_flip_R': {},
+                }
+            )
             subject_results['pred'][f'experiment_{version_number}'] = pred_cls
             subject_results['pred_R'][f'experiment_{version_number}'] = pred_r
             subject_results['pred_flip_R'][f'experiment_{version_number}'] = pred_flip_r
@@ -365,7 +367,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluation settings')
 
     parser = argparse.ArgumentParser(description='Evaluation settings')
-    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
+    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', 
+                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', 
+                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
     parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
