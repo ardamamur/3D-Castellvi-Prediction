@@ -153,16 +153,10 @@ class VerSe(Dataset):
             return 2
         
         elif castellvi == '4':
-            if flip == 0:
-                if side == 'R':
-                    return 2
-                else:
-                    return 1
+            if side == 'R':
+                return 2
             else:
-                if side == 'R':
-                    return 1
-                else:
-                    return 2     
+                return 1  
         else:
             return 0
 
