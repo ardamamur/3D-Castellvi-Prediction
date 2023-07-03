@@ -94,7 +94,7 @@ class VerSe(Dataset):
         
         if record["flip"]:
             # Flip 2b and 3b labels and 0 cases
-            print("subject_name:", record["subject"])
+            #print("subject_name:", record["subject"])
             img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
 
         
@@ -103,7 +103,8 @@ class VerSe(Dataset):
         labels = self._get_label_based_on_conditions(record)
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
-
+        
+        print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
         return {"target": inputs, "class": labels}
 
 
