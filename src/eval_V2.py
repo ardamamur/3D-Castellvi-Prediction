@@ -1,19 +1,33 @@
-import sys
-sys.path.append('/data1/practical-sose23/castellvi/castellvi_prediction/bids')
-import torch
 import os
-import argparse
-import json
 import re
-from utils._prepare_data import DataHandler, read_config
+import sys
+import json
+import argparse
+import numpy as np
+import pandas as pd
+import torch.nn as nn
+from utils._prepare_data import DataHandler
+from sklearn.metrics import f1_score
+from modules.DenseNetModule import DenseNet
+from modules.ResNetModule import ResNet
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+from dataset.VerSe import *
+from utils._get_model import *
+from sklearn.metrics import ConfusionMatrixDisplay
+
+# Append path to import custom modules
+sys.path.append('/data1/practical-sose23/castellvi/castellvi_prediction/bids')
+
+
+# Custom module imports
+from utils._prepare_data import DataHandler
 from utils._get_model import *
 from modules.DenseNetModule import DenseNet
 from modules.ResNetModule import ResNet
 from dataset.VerSe import *
-from sklearn.metrics import f1_score
-from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+
 
 class Eval:
     def __init__(self, opt) -> None:
@@ -39,20 +53,42 @@ class Eval:
         return best_model_paths
 
 
-    def get_label_map(self):
+    def get_label_map(self, map:str='final_class'):
         if self.opt.classification_type == "right_side":
             # Define a mapping from pairs of predictions to final predictions
-            prediction_mapping = {
-                ('1', '1'): '2b',
-                ('2', '2'): '3b',
-                ('0', '0'): '0',
-                ('0', '1'): '2a',
-                ('1', '0'): '2a',
-                ('0', '2'): '3a',
-                ('2', '0'): '3a',
-                ('1', '2'): '4',
-                ('2', '1'): '4',
-            }
+
+            if map == 'final_class':
+
+                prediction_mapping = {
+                    ('1', '1'): '2b',
+                    ('2', '2'): '3b',
+                    ('0', '0'): '0',
+                    ('0', '1'): '2a',
+                    ('1', '0'): '2a',
+                    ('0', '2'): '3a',
+                    ('2', '0'): '3a',
+                    ('1', '2'): '4',
+                    ('2', '1'): '4',
+                }
+
+            elif map == 'side_class':
+
+                prediction_mapping = {
+                    '0': '0',
+                    '2a': '2',
+                    '2b': '2',
+                    '3a': '3',
+                    '3b': '3'
+                }
+
+            elif map == 'output_class':
+                
+                prediction_mapping = {
+                    '2': '3',
+                    '1': '2',
+                    '0': '0'
+                }
+
             return prediction_mapping
         else:
             raise NotImplementedError("Only right_side classification is supported")
@@ -76,9 +112,15 @@ class Eval:
         # extract the test subjects from masterlist by usıng the Split column and if Flip is 0
         masterlist = pd.read_excel(self.opt.master_list, index_col=0)
         #masterlist = masterlist.loc[masterlist['Split'] == 'test'] # extract test subjects
-        masterlist = masterlist[masterlist['Split'].isin(['test', 'val'])]
+        masterlist = masterlist[masterlist['Full_Id'].str.contains('|'.join(self.opt.dataset))]
+        if self.opt.eval_type != 'all':
+            # return the subjects if FullId contains any substring from dataset array 
+            masterlist = masterlist[masterlist['Split'].isin(['test', 'val'])]
+        else:
+            masterlist = masterlist[masterlist['Split'].isin(['test', 'val', 'train'])]
+
         masterlist = masterlist.loc[masterlist['Flip'] == 0] # extract subjects with Flip = 0
-        test_subjects = masterlist.index.tolist()
+        test_subjects = masterlist["Full_Id"].tolist()
         return test_subjects
     
     def get_processor(self):
@@ -91,12 +133,21 @@ class Eval:
     
     def get_records(self, processor, test_subjects):
         test_records = []
-        records = processor.verse_records
-        # return speicific indexes of records that are in test_subjects
+        verse_records = processor.verse_records
+        tri_records = processor.tri_records
+        records = verse_records + tri_records
         for index in range(len(records)):
-            if index in test_subjects:
-                test_records.append(records[index])
-
+            record = records[index]
+            # check if any element in test subhjects contains the subject in record
+            if any(record['subject'] in s for s in test_subjects):
+                # check for the flip value
+                if record['flip'] == 0:
+                    test_records.append(record)
+                else:
+                    continue
+            else:
+                continue
+        print(len(test_records))
         return test_records
     
     def get_predictions(self, model, version_number):
@@ -122,7 +173,7 @@ class Eval:
         eval_results = []
 
         # Check if eval_results file exists and load it
-        eval_file_path = self.opt.experiments + "/baseline_models/" + self.opt.model + "/eval_results.json"
+        eval_file_path = self.opt.experiments + "/baseline_models/" + self.opt.model + "/eval_results_verse.json"
         if os.path.exists(eval_file_path):
             with open(eval_file_path, 'r') as f:
                 eval_results = json.load(f)
@@ -135,9 +186,10 @@ class Eval:
             # Get the data
             img = processor._get_cutout(record,return_seg=self.opt.use_seg, max_shape=self.data_size)
 
+
             ###Apply zeroing out and binarizing
-            if self.use_seg:
-                if self.use_zero_out:
+            if self.opt.use_seg:
+                if self.opt.use_zero_out:
                     l_idx = 25 if 25 in img else 24 if 24 in img else 23
                     l_mask = img == l_idx #create a mask for values belonging to lowest L
                     sac_mask = img == 26 #Sacrum is always denoted by value of 26
@@ -145,12 +197,12 @@ class Eval:
                     lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
                     img = img * lsac_mask
 
-                if self.use_bin_seg:
+                if self.opt.use_bin_seg:
                     bin_mask = img != 0
                     img = bin_mask.astype(float)
                 
 
-            elif self.use_zero_out:
+            elif self.opt.use_zero_out:
                 #We need the segmentation mask to create the boolean zero-out mask, TODO: Use seg-subreg mask in future for better details
                 seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
                 l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
@@ -207,14 +259,49 @@ class Eval:
                 
                 y_pred.append(pred_cls)
 
-            
+            acutal_r = None
+            pred_r = self.get_label_map(map='output_class')[pred_cls_1]
+            pred_flip_r = self.get_label_map(map='otuput_class')[pred_cls_2]
+
+            if record['side'] == 'R':
+                if label == '4':
+                    acutal_r = self.get_label_map(map='side_class')['3a']
+                    actual_flip_r = self.get_label_map(map='side_class')['2a']
+                elif label == '3a' or label == '2a':
+                    acutal_r = self.get_label_map(map='side_class')[label]
+                    actual_flip_r = self.get_label_map(map='side_class')['0']
+                else:
+                    acutal_r = self.get_label_map(map='side_class')[label]
+                    actual_flip_r = self.get_label_map(map='side_class')[label]
+            else:
+                if label == '4':
+                    acutal_r = self.get_label_map(map='side_class')['2a']
+                    actual_flip_r = self.get_label_map(map='side_class')['3a']
+
+                elif label == '3a' or label == '2a':
+                    acutal_r = self.get_label_map(map='side_class')['0']
+                    actual_flip_r = self.get_label_map(map='side_class')[label]
+                else:
+                    acutal_r = self.get_label_map(map='side_class')[label]     
+                    actual_flip_r = self.get_label_map(map='side_class')[label]       
+
              # Update eval_results_dict
-            subject_results = eval_results_dict.get(record['subject'], {
-                'subject_name': record['subject'],
-                'actual_label': label,
-                'predicted_labels': {}
-            })
-            subject_results['predicted_labels'][f'experiment_{version_number}'] = pred_cls
+            subject_results = eval_results_dict.get(
+                record['subject'], 
+                {
+                    'subject_name': record['subject'],
+                    'actual': label,
+                    'actual_R' : acutal_r,
+                    'actual_flip_R' : actual_flip_r,
+                    'pred': {},
+                    'pred_R': {},
+                    'pred_flip_R': {},
+                }
+            )
+            subject_results['pred'][f'experiment_{version_number}'] = pred_cls
+            subject_results['pred_R'][f'experiment_{version_number}'] = pred_r
+            subject_results['pred_flip_R'][f'experiment_{version_number}'] = pred_flip_r
+
             if pred_cls == label:
                 subject_results['correct'] = subject_results.get('correct', 0) + 1
             else:
@@ -280,7 +367,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluation settings')
 
     parser = argparse.ArgumentParser(description='Evaluation settings')
-    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20'])
+    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', 
+                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', 
+                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
     parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
@@ -304,6 +393,9 @@ if __name__ == "__main__":
     parser.add_argument('--manual_seed', type=int, default=1)
     parser.add_argument('--num_classes', type=int, default=3)
     parser.add_argument('--port', type=int, default=6484)
+    parser.add_argument('--dataset', nargs='+', default=['verse'])
+    parser.add_argument('--eval_type', type=str, default='test')
+
   
     parser.add_argument('--use_seg', action='store_true')
     parser.add_argument('--no_cuda', action='store_true')

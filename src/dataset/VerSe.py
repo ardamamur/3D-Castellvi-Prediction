@@ -3,7 +3,7 @@ import pandas as pd
 from torch.utils.data import Dataset
 from utils._prepare_data import DataHandler
 from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic, RandAffine
-
+from scipy import ndimage
 
 
 class VerSe(Dataset):
@@ -94,7 +94,7 @@ class VerSe(Dataset):
         
         if record["flip"]:
             # Flip 2b and 3b labels and 0 cases
-            print("subject_name:", record["subject"])
+            #print("subject_name:", record["subject"])
             img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
 
         
@@ -103,7 +103,8 @@ class VerSe(Dataset):
         labels = self._get_label_based_on_conditions(record)
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
-
+        
+        print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
         return {"target": inputs, "class": labels}
 
 
@@ -144,6 +145,7 @@ class VerSe(Dataset):
 
         castellvi = str(record["castellvi"])
         side = str(record['side'])
+        flip = str(record['flip'])
 
         if castellvi == '2b' or ((castellvi == '2a' and side == 'R')):
             return 1
@@ -151,6 +153,11 @@ class VerSe(Dataset):
         elif castellvi == '3b' or (castellvi == '3a' and side == 'R'):
             return 2
         
+        elif castellvi == '4':
+            if side == 'R':
+                return 2
+            else:
+                return 1  
         else:
             return 0
 
@@ -228,11 +235,12 @@ class VerSe(Dataset):
         else:
 
             transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
-                                    # Random Rotoation with degree 10
-                                    #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
-                                    # Random Translation with 10% probability
-                                    RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=self.opt.aug_prob),
-                                    RandRotate)
+                                      RandAffine(translate_range=self.opt.translate_range, 
+                                                rotate_range=np.deg2rad(self.opt.rotate_range),
+                                                scale_range=(float(self.opt.scale_range[0]),float(self.opt.scale_range[1])),
+                                                prob=self.opt.aug_prob)
+                                    )
+            
 
         return transformations
     
