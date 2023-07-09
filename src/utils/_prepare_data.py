@@ -277,13 +277,16 @@ class DataHandler:
         #Check for existing cutouts
         assert(save_dir != None)
 
+        logging.basicConfig(filename=save_dir + "/cutouts/shape_{}_{}_{}/cutout_log.txt".format(max_shape[0], max_shape[1], max_shape[2]), level=logging.INFO)
+
         dir_path = save_dir + "/cutouts/shape_{}_{}_{}".format(max_shape[0], max_shape[1], max_shape[2])
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
         filepath_seg = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")
         filepath_ct = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
         filepath_ctd = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ctd")
-        if os.path.isfile(filepath_seg + ".npy") and os.path.isfile(filepath_ct + ".npy") and skip_existing:
+        if os.path.isfile(filepath_seg + ".npy") and os.path.isfile(filepath_ct + ".npy") and os.path.isfile(filepath_ctd + ".json") and os.path.isfile(filepath_ct + ".nii.gz") and os.path.isfile(filepath_seg + ".nii.gz") and skip_existing:
+            logging.info("Cutout for subject {} already exists".format(record["subject"]))
             return record["subject"]
         
         #redirect stdout to silence the function
@@ -346,6 +349,8 @@ class DataHandler:
 
         #Revert stdout
         sys.stdout = sys.__stdout__
+
+        logging.info("Cutout for subject {} saved".format(record["subject"]))
 
         return record["subject"]
 
@@ -449,14 +454,13 @@ def read_config(config_file):
 
 def main():
     WORKING_DIR = "/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/"
-    logging.basicConfig(filename=WORKING_DIR + 'data/prepare_data.log', encoding='utf-8', level=logging.DEBUG)
     dataset = [WORKING_DIR  + 'data/dataset-verse19',  WORKING_DIR + 'data/dataset-verse20', WORKING_DIR + "data/dataset-tri", WORKING_DIR + "data/dataset-tri"]
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg"]
-    master_list = '/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx'
+    master_list = '/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/src/dataset/Castellvi_list_v2.xlsx'
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
     #processor._get_cutout(sample,return_seg = False, max_shape=(128, 86, 136),save_dir = WORKING_DIR + "data", skip_existing=True)
-    processor._prepare_cutouts(save_dir = WORKING_DIR + "data", n_jobs=8, skip_existing=False)
+    processor._prepare_cutouts(save_dir = WORKING_DIR + "data", n_jobs=8, skip_existing=True)
 
 
     
