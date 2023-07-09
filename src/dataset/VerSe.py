@@ -104,7 +104,7 @@ class VerSe(Dataset):
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
         
-        print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
+        #print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
         return {"target": inputs, "class": labels}
 
 
@@ -145,9 +145,9 @@ class VerSe(Dataset):
 
         castellvi = str(record["castellvi"])
         side = str(record['side'])
-        flip = str(record['flip'])
 
-        if castellvi == '2b' or ((castellvi == '2a' and side == 'R')):
+        
+        if castellvi == '2b' or (castellvi == '2a' and side == 'R'):
             return 1
         
         elif castellvi == '3b' or (castellvi == '3a' and side == 'R'):
@@ -160,6 +160,8 @@ class VerSe(Dataset):
                 return 1  
         else:
             return 0
+        
+       
 
     def _get_castellvi_multi_labels(self, record):
 
