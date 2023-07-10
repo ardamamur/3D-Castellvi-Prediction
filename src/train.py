@@ -40,11 +40,11 @@ def run_cross_validation(params, current_fold):
     logger = TensorBoardLogger(experiment, default_hp_metric=False)
     # TODO: Add early stopping
     checkpoint_callback = ModelCheckpoint(
-        monitor='val_loss',
+        monitor='mcc',
         dirpath=f'{experiment}/best_models/version_{logger.version}',
         filename=params.model + '-{epoch:02d}-{val_loss:.2f}' + '-' + str(current_fold),
-        save_top_k = 1,
-        mode='min',
+        save_top_k = 3,
+        mode='max',
     )
 
     # Create trainer
@@ -88,11 +88,11 @@ def main(params):
         
         # TODO: Add early stopping
         checkpoint_callback = ModelCheckpoint(
-            monitor='val_loss',
+            monitor='mcc',
             dirpath=f'{experiment}/best_models/version_{logger.version}',
             filename=params.model + '-{epoch:02d}-{val_loss:.2f}',
-            save_top_k=1,
-            mode='min',
+            save_top_k=3,
+            mode='max',
         )
 
         # Create trainer
@@ -196,7 +196,7 @@ if __name__ == '__main__':
                                                            str(os.path.join(env_settings.DATA, 'dataset-tri'))])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_v2.xlsx')))
+    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split.xlsx')))
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
