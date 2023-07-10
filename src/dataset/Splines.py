@@ -7,9 +7,10 @@ from BIDS import Centroids
 from scipy.spatial import ConvexHull
 
 class Splines(Dataset):
-    def __init__(self, processor:DataHandler):
+    def __init__(self, processor:DataHandler, binary=False):
         self.processor = processor
         self.records = self.processor.verse_records + self.processor.tri_records
+        self.binary = binary
 
     def __len__(self):
         '''
@@ -44,6 +45,9 @@ class Splines(Dataset):
         
         # Get label
         label = _get_castellvi_right_side_label(record)
+
+        if self.binary:
+            label = 0 if label == 0 else 1
 
         # Convert to tensor
         spline_points = torch.tensor(spline_points, dtype=torch.float32)
@@ -83,9 +87,10 @@ class Splines(Dataset):
         return np.asarray(list(zip(x_fine, y_fine, z_fine))), np.asarray(list(zip(xp_fine, yp_fine, zp_fine)))
 
 class ConvexHullDataset(Dataset):
-    def __init__(self, processor:DataHandler):
+    def __init__(self, processor:DataHandler, binary=False):
         self.processor = processor
         self.records = processor.verse_records + processor.tri_records
+        self.binary = binary
 
     def __len__(self):
         '''
@@ -104,6 +109,9 @@ class ConvexHullDataset(Dataset):
 
         seg = seg_nii.get_array()
 
+        if record['flip']:
+            seg = np.flip(seg, axis=2)
+
         last_L = 25 if 25 in seg else 24 if 24 in seg else 23 if 23 in seg else None
         assert(last_L is not None, "Last L not found for subject {}".format(record['subject']))
 
@@ -120,11 +128,28 @@ class ConvexHullDataset(Dataset):
         last_L_hull = ConvexHull(last_L_points)
         sac_hull = ConvexHull(sac_points)
 
+        # Make a list of the points in the convex hull
+        last_L_hull = last_L_points[last_L_hull.vertices, :]
+        sac_hull = sac_points[sac_hull.vertices, :]
+
+        # Pad lists from (n, 3) t0 (256, 3)
+        last_L_hull = np.pad(last_L_hull, ((0, 256 - last_L_hull.shape[0]), (0, 0)))
+        sac_hull = np.pad(sac_hull, ((0, 256 - sac_hull.shape[0]), (0, 0)))
+
+        # Concatenate the two hulls
+        hulls = np.concatenate((last_L_hull, sac_hull), axis=1)
+
+        # Convert to tensor
+        hulls = torch.tensor(hulls, dtype=torch.float32)
+
         # Get label
         label = _get_castellvi_right_side_label(record)
 
+        if self.binary:
+            label = 0 if label == 0 else 1
+
         # Return convex hulls as dict and label
-        return {'last_L': last_L_hull, 'sac': sac_hull}, label
+        return hulls, label
 
 
 
