@@ -40,7 +40,7 @@ def run_cross_validation(params, current_fold):
     logger = TensorBoardLogger(experiment, default_hp_metric=False)
     # TODO: Add early stopping
     checkpoint_callback = ModelCheckpoint(
-        monitor='mcc',
+        monitor='val_mcc',
         dirpath=f'{experiment}/best_models/version_{logger.version}',
         filename=params.model + '-{epoch:02d}-{val_loss:.2f}' + '-' + str(current_fold),
         save_top_k = 3,
@@ -88,7 +88,7 @@ def main(params):
         
         # TODO: Add early stopping
         checkpoint_callback = ModelCheckpoint(
-            monitor='mcc',
+            monitor='val_mcc',
             dirpath=f'{experiment}/best_models/version_{logger.version}',
             filename=params.model + '-{epoch:02d}-{val_loss:.2f}',
             save_top_k=3,

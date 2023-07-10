@@ -75,8 +75,8 @@ class DenseNet(pl.LightningModule):
             mcc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             cohen = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
-            self.logger.experiment.add_scalar('train_matthews_acc', mcc, self.current_epoch)
-            self.logger.experiment.add_scalar("train_cohen_acc", cohen, self.current_epoch)
+            self.logger.experiment.add_scalar('train_mcc', mcc, self.current_epoch)
+            self.logger.experiment.add_scalar("train_cohen_kappa", cohen, self.current_epoch)
             self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
             self.training_step_outputs = []  # Clear the outputs at the end of each epoch
 
@@ -155,6 +155,10 @@ class DenseNet(pl.LightningModule):
             f1_p_cls = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, average="none", num_classes=self.num_classes, task='multiclass')
             prec = mF.precision(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             confmat = mF.confusion_matrix(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+
+            # Log MCC and Cohen's Kappa for Model selection
+            self.log("val_mcc", mcc, on_epoch=True)
+            self.log("val_cohen_kappa", cohen, on_epoch=True)
             
             try:
                 import seaborn as sns
@@ -167,9 +171,8 @@ class DenseNet(pl.LightningModule):
                 print("caught exception in confusion matrix", e)
 
             # Log important validation values
-            self.logger.experiment.add_scalar('train_matthews_acc', mcc, self.current_epoch)
-            self.logger.experiment.add_scalar('val_matthews_acc', mcc, self.current_epoch)
-            self.logger.experiment.add_scalar("val_cohen_acc", cohen, self.current_epoch)
+            self.logger.experiment.add_scalar('val_mcc', mcc, self.current_epoch)
+            self.logger.experiment.add_scalar("val_cohen_kappa", cohen, self.current_epoch)
             self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
             self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
             self.logger.experiment.add_text("f1_p_cls", str(f1_p_cls.tolist()), self.current_epoch)
