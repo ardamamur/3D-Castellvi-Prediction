@@ -118,6 +118,8 @@ class VerSe(Dataset):
             return self._get_castellvi_right_side_label(record)
         elif self.classification_type == "multi_class":
             return self._get_castellvi_multi_labels(record)
+        elif self.classification_type == "right_side_binary":
+            return self._get_right_side_binary_label(record)
         else:
             raise ValueError("Invalid classification type")
 
@@ -161,7 +163,13 @@ class VerSe(Dataset):
         else:
             return 0
         
-       
+    def _get_right_side_binary_label(self, record):
+        """
+        Returns a binary label for right side classification. 0 if the right side label is 0 and 1 in all other cases.
+        Args:
+            record (dict): record to get the label for
+        """
+        return 0 if self._get_castellvi_right_side_label(record) == 0 else 1
 
     def _get_castellvi_multi_labels(self, record):
 
