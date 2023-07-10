@@ -74,10 +74,10 @@ class DenseNet(pl.LightningModule):
             mcc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             cohen = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
-            self.log('train_loss', avg_loss, self.current_epoch, on_epoch=True)
-            self.log('train_mcc', mcc, self.current_epoch, on_epoch=True)
-            self.log("train_cohen_kappa", cohen, self.current_epoch, on_epoch=True)
-            self.log("train_f1score", f1score, self.current_epoch, on_epoch=True)
+            self.log('train_loss', avg_loss, on_epoch=True)
+            self.log('train_mcc', mcc, on_epoch=True)
+            self.log("train_cohen_kappa", cohen, on_epoch=True)
+            self.log("train_f1score", f1score, on_epoch=True)
             self.training_step_outputs = []  # Clear the outputs at the end of each epoch
 
 
@@ -157,10 +157,10 @@ class DenseNet(pl.LightningModule):
             confmat = mF.confusion_matrix(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
 
             # Log MCC and Cohen's Kappa for Model selection
-            self.log("val_mcc", mcc, on_epoch=True)
-            self.log("val_cohen_kappa", cohen, on_epoch=True)
-            self.log("val_f1score", f1score, on_epoch=True)
-            self.log("val_prec", prec, on_epoch=True)
+            self.log("val_mcc", mcc.item(), on_epoch=True)
+            self.log("val_cohen_kappa", cohen.item(), on_epoch=True)
+            self.log("val_f1score", f1score.item(), on_epoch=True)
+            self.log("val_prec", prec.item(), on_epoch=True)
 
             # Log F1 score per class
             for i in range(self.num_classes):

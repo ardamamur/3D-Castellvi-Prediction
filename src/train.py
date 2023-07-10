@@ -42,7 +42,7 @@ def run_cross_validation(params, current_fold):
     checkpoint_callback = ModelCheckpoint(
         monitor='val_mcc',
         dirpath=f'{experiment}/best_models/version_{logger.version}',
-        filename=params.model + '-{epoch:02d}-{val_loss:.2f}' + '-' + str(current_fold),
+        filename=params.model + '-{epoch:02d}-{val_mcc:.2f}' + '-' + str(current_fold),
         save_top_k = 3,
         mode='max',
     )
@@ -90,7 +90,7 @@ def main(params):
         checkpoint_callback = ModelCheckpoint(
             monitor='val_mcc',
             dirpath=f'{experiment}/best_models/version_{logger.version}',
-            filename=params.model + '-{epoch:02d}-{val_loss:.2f}',
+            filename=params.model + '-{epoch:02d}-{val_mcc:.2f}',
             save_top_k=3,
             mode='max',
         )
