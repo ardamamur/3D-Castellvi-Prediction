@@ -1,15 +1,16 @@
-import os
+import os, sys
 import torch
 import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tensorboard import program
-from utils._prepare_data import DataHandler, read_config
+from utils._prepare_data import DataHandler
 from modules.ResNetModule import ResNet
 from modules.VerSeDataModule import VerSeDataModule
 from modules.DenseNetModule import DenseNet
 from modules.DenseNetModule_v2 import DenseNetV2
+from utils.environment_settings import env_settings
 
 def get_model_class(model_name:str):
     model_classes = {
@@ -177,6 +178,12 @@ def start_tensorboard(port, tracking_address: str):
 
 if __name__ == '__main__':
 
+    if env_settings.CUDA_VISIBLE_DEVICES is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(env_settings.CUDA_VISIBLE_DEVICES)
+
+    if env_settings.BIDS_PATH is not None:
+        sys.path.append(env_settings.BIDS_PATH)
+
     if torch.cuda.is_available():
         print('Running on GPU #' + str(torch.cuda.current_device()))
     else:
@@ -184,12 +191,12 @@ if __name__ == '__main__':
 
     
     parser = argparse.ArgumentParser(description='Training settings')
-    parser.add_argument('--data_root', nargs='+', default=['/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19',
-                                                           '/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', 
-                                                           '/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
+    parser.add_argument('--data_root', nargs='+', default=[str(os.path.join(env_settings.DATA, 'dataset-verse19')),
+                                                           str(os.path.join(env_settings.DATA, 'dataset-verse20')),
+                                                           str(os.path.join(env_settings.DATA, 'dataset-tri'))])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default='/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/src/dataset/Castellvi_list_v2.xlsx')
+    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_v2.xlsx')))
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
@@ -205,7 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_intervals', type=int, default=10)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--resume_path', default='')
-    parser.add_argument('--experiments', default='/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/experiments')
+    parser.add_argument('--experiments', default=env_settings.EXPERIMENTS)
     parser.add_argument('--gpu_id', default='0')
     parser.add_argument('--n_devices', type=int, default=1)
     parser.add_argument('--manual_seed', type=int, default=1)

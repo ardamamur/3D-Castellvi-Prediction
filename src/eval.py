@@ -7,9 +7,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import ndimage
-from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay, matthews_corrcoef, cohen_kappa_score
 import torch
 from torch import nn
+from utils.environment_settings import env_settings
 
 # Append path to import custom modules
 sys.path.append('/data1/practical-sose23/castellvi/castellvi_prediction/bids')
@@ -302,61 +303,87 @@ def main(params, ckpt_path=None):
     # Run evaluation for each best model
     gt, preds = evaluator.evaluate(path=best_model_path)
     
-    # f1 = evaluator.get_f1_score(gt, preds)
-    # cm = evaluator.get_confusion_matrix(gt, preds)
+    # Calculate Confusion Matrix, F1, Cohen's Kappa and Matthews Correlation Coefficient
+    cm = confusion_matrix(gt, preds)
+    f1 = f1_score(gt, preds, average='weighted')
+    ck = cohen_kappa_score(gt, preds)
+    mcc = matthews_corrcoef(gt, preds)
+    print('Confusion Matrix: \n', cm)
+    print('F1 Score: ', f1)
+    print('Cohen\'s Kappa: ', ck)
+    print('Matthews Correlation Coefficient: ', mcc)
 
-    # print('Version Number:', params.version_no)
-    # print("Model: ", ckpt_path)
-    # print("F1 score: ", f1)
-    # print("Confusion matrix: \n ", cm)
 
 
 
 if __name__ == "__main__":
 
+    if env_settings.CUDA_VISIBLE_DEVICES is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(env_settings.CUDA_VISIBLE_DEVICES)
+
+    if env_settings.BIDS_PATH is not None:
+        sys.path.append(env_settings.BIDS_PATH)
+
+    if torch.cuda.is_available():
+        print('Running on GPU #' + str(torch.cuda.current_device()))
+    else:
+        print('Running on CPU')
+
     parser = argparse.ArgumentParser(description='Evaluation settings')
 
     parser = argparse.ArgumentParser(description='Evaluation settings')
-    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', 
-                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', 
-                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
+    parser.add_argument('--data_root', nargs='+', default=[str(os.path.join(env_settings.DATA, 'dataset-verse19')),
+                                                           str(os.path.join(env_settings.DATA, 'dataset-verse20')),
+                                                           str(os.path.join(env_settings.DATA, 'dataset-tri'))])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
+    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_v2.xlsx')))
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
     parser.add_argument('--phase', default='train')
     parser.add_argument('--scheduler', default='ReduceLROnPlateau')
     parser.add_argument('--optimizer', default='AdamW')
-    parser.add_argument('--learning_rate', type=float, default=0.001)
+    parser.add_argument('--learning_rate', type=float, default=0.0001)
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--total_iterations', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--save_intervals', type=int, default=10)
-    parser.add_argument('--n_epochs', type=int, default=150)
+    parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--resume_path', default='')
-    parser.add_argument('--experiments', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments')
-    parser.add_argument('--gpu_id', default='3')
+    parser.add_argument('--experiments', default=env_settings.EXPERIMENTS)
+    parser.add_argument('--gpu_id', default='0')
     parser.add_argument('--n_devices', type=int, default=1)
     parser.add_argument('--manual_seed', type=int, default=1)
     parser.add_argument('--num_classes', type=int, default=3)
-    parser.add_argument('--port', type=int, default=6484)
-    parser.add_argument('--dataset', nargs='+', default=['verse'])
-    parser.add_argument('--eval_type', type=str, default='test')
-    parser.add_argument('--results_df', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv')
+    parser.add_argument('--port', type=int, default=2023)
+    parser.add_argument('--model_type', type=str, default='')
 
-  
+
+    parser.add_argument('--rotate_range', type=int, default=10)
+    parser.add_argument('--shear_range', type=float, default=0.2)
+    parser.add_argument('--translate_range', type=float, default=0.15)
+    parser.add_argument('--scale_range', nargs='+', default=[0.9, 1.1])
+    parser.add_argument('--aug_prob', type=float, default=0.5)
+
+
     parser.add_argument('--use_seg', action='store_true')
     parser.add_argument('--no_cuda', action='store_true')
     parser.add_argument('--weighted_sample', action='store_true')
     parser.add_argument('--weighted_loss', action='store_true')
     parser.add_argument('--flip_all', action='store_true')
-    parser.add_argument('--version_no', type=int, default=0)
+    parser.add_argument('--cross_validation', action='store_true')
     parser.add_argument('--use_bin_seg', action='store_true')
     parser.add_argument('--use_zero_out', action='store_true')
-
+    parser.add_argument('--gradual_freezing', action='store_true')
+    parser.add_argument('--elastic_transform', action='store_true')
+    
+    parser.add_argument('--version_no', type=int, default=0)
+    parser.add_argument('--dataset', nargs='+', default=['verse', 'tri'])
+    parser.add_argument('--eval_type', type=str, default='test')
+    
     params = parser.parse_args()
     ckpt_path = params.experiments + '/baseline_models/' + params.model + '/best_models/version_' + str(params.version_no) 
     main(params=params, ckpt_path=ckpt_path)

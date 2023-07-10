@@ -4,15 +4,15 @@ import pandas as pd
 import BIDS
 from BIDS import BIDS_Global_info
 from BIDS.centroids import load_centroids
-import types
 from tqdm import tqdm
-import yaml
 from pqdm.processes import pqdm
 import logging
 import os
 import random
 import nibabel as nib
 import sys
+
+from .environment_settings import env_settings
 
 from functools import partial
 
@@ -201,7 +201,7 @@ class DataHandler:
         return ap_slice, lr_slice, is_slice
 
 
-    def _get_cutout(self, record, return_seg, max_shape, save_dir = "/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/data", skip_existing = True):
+    def _get_cutout(self, record, return_seg, max_shape, skip_existing = True):
         """
         Args:
             BIDS Family, return_seg (instead of ct), max_shape
@@ -210,10 +210,9 @@ class DataHandler:
             Cutouts generally contains the full lowest vertebra and are always padded to max_shape
     
         """
-        assert(save_dir != None)
 
-        filepath_seg = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")
-        filepath_ct = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
+        filepath_seg = str(os.path.join(env_settings.DATA, "cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")))
+        filepath_ct = str(os.path.join(env_settings.DATA, "cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")))
 
         if os.path.isfile(filepath_seg + ".npy") and os.path.isfile(filepath_ct + ".npy") and skip_existing:
             if return_seg:
@@ -222,14 +221,14 @@ class DataHandler:
                 return(np.load(file=filepath_ct + ".npy"))
 
         else:
-            self._prepare_cutout(record, max_shape, save_dir = save_dir, skip_existing = skip_existing)
+            self._prepare_cutout(record, max_shape, skip_existing = skip_existing)
         
         if return_seg:
             return(np.load(file=filepath_seg + ".npy"))
         else:
             return(np.load(file=filepath_ct + ".npy"))
         
-    def get_ct_seg_ctd_cutout(self, record, max_shape=(128, 86, 136), save_dir = "/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/data", skip_existing = True):
+    def get_ct_seg_ctd_cutout(self, record, max_shape=(128, 86, 136), skip_existing = True):
         """
         Args:
             BIDS Family, max_shape
@@ -238,18 +237,18 @@ class DataHandler:
             Cutouts generally contains the full lowest vertebra and are always padded to max_shape
     
         """
-        assert save_dir != None
+        assert env_settings.DATA != None
 
-        filepath_ctd = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ctd")
-        filepath_seg = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")
-        filepath_ct = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
+        filepath_ctd = env_settings.DATA + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ctd")
+        filepath_seg = env_settings.DATA + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")
+        filepath_ct = env_settings.DATA + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
         return self._np_to_nifti(np.load(file=filepath_ct + ".npy")), self._np_to_nifti(np.load(file=filepath_seg + ".npy")), load_centroids(filepath_ctd + ".json", verbose = False)
 
-    def _prepare_cutouts(self, save_dir, max_shape=(128, 86, 136), n_jobs = 8, skip_existing = True):
+    def _prepare_cutouts(self, max_shape=(128, 86, 136), n_jobs = 8, skip_existing = True):
 
-        assert(save_dir != None)
+        assert(env_settings.DATA != None)
         total_records = self.verse_records + self.tri_records
-        seg_fun = partial(self._prepare_cutout, max_shape = max_shape, save_dir = save_dir, skip_existing = skip_existing)
+        seg_fun = partial(self._prepare_cutout, max_shape = max_shape, skip_existing = skip_existing)
         random.shuffle(total_records)
         
         #We use pqdm to apply seg_fun to all records in parallel
@@ -268,23 +267,23 @@ class DataHandler:
         
         
 
-    def _prepare_cutout(self, record, max_shape, save_dir = "/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/data", skip_existing = True):
+    def _prepare_cutout(self, record, max_shape, skip_existing = True):
         """
         Args:
             record, max_shape
         """
 
         #Check for existing cutouts
-        assert(save_dir != None)
+        assert(env_settings.DATA != None)
 
-        logging.basicConfig(filename=save_dir + "/cutouts/shape_{}_{}_{}/cutout_log.txt".format(max_shape[0], max_shape[1], max_shape[2]), level=logging.INFO)
+        logging.basicConfig(filename=env_settings.DATA + "/cutouts/shape_{}_{}_{}/cutout_log.txt".format(max_shape[0], max_shape[1], max_shape[2]), level=logging.INFO)
 
-        dir_path = save_dir + "/cutouts/shape_{}_{}_{}".format(max_shape[0], max_shape[1], max_shape[2])
+        dir_path = env_settings.DATA + "/cutouts/shape_{}_{}_{}".format(max_shape[0], max_shape[1], max_shape[2])
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
-        filepath_seg = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")
-        filepath_ct = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
-        filepath_ctd = save_dir + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ctd")
+        filepath_seg = env_settings.DATA + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "seg")
+        filepath_ct = env_settings.DATA + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ct")
+        filepath_ctd = env_settings.DATA + "/cutouts/shape_{}_{}_{}/sub-{}_castellvi-cutout_{}_iso".format(max_shape[0], max_shape[1], max_shape[2], record["subject"], "ctd")
         if os.path.isfile(filepath_seg + ".npy") and os.path.isfile(filepath_ct + ".npy") and os.path.isfile(filepath_ctd + ".json") and os.path.isfile(filepath_ct + ".nii.gz") and os.path.isfile(filepath_seg + ".nii.gz") and skip_existing:
             logging.info("Cutout for subject {} already exists".format(record["subject"]))
             return record["subject"]
@@ -416,54 +415,17 @@ class DataHandler:
         return max_shapes.max(axis = 0)
     
 
-    def _get_subject_samples(self):
-        '''
-        This function extract subject names for training dataset creation
-        '''
-        bids_subjects = []
-        master_subjects = []
-        self._drop_missing_entries()
-        families = self._get_families()
-        multi_family_subjects = self._get_subjects_with_multiple_families(families)
-        for subject in self.bids.subjects:
-            if not self._is_multi_family(subject, families=multi_family_subjects):
-                sub_name, exists = self._get_subject_name(subject=subject)
-                if exists:
-                    bids_subjects.append(subject)
-                    master_subjects.append(sub_name)
-        return bids_subjects, master_subjects
-    
-    def _get_array(self, img):
-        img_arr = img.get_array()
-        return img_arr.astype(np.float32)
-
-def save_list(path, list):
-    # Open the file in write mode ('w')
-    with open(path, 'w') as f:
-        for item in list:
-            # Write each item on a new line
-            f.write("%s\n" % item)
-
-
-def read_config(config_file):
-    with open(config_file, 'r') as file:
-        config_dict = yaml.safe_load(file)
-    config_dict['save_folder'] = "../../experiments/{}/".format(config_dict['model'])
-    config = types.SimpleNamespace(**config_dict)
-    return config
-
 def main():
-    WORKING_DIR = "/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/"
-    dataset = [WORKING_DIR  + 'data/dataset-verse19',  WORKING_DIR + 'data/dataset-verse20', WORKING_DIR + "data/dataset-tri", WORKING_DIR + "data/dataset-tri"]
+    #Run this script to prepare the cutouts. Cutouts are generated "on the fly" when running the training script, but preparing them in advance saves time due to parallelization.
+    dataset = [str(os.path.join(env_settings.DATA_DIR, 'dataset-verse19')),
+               str(os.path.join(env_settings.DATA_DIR, 'dataset-verse20')),
+               str(os.path.join(env_settings.DATA_DIR, 'dataset-tri'))]
+    
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg"]
-    master_list = '/home/daniel/Documents/Uni/practical-sose23/castellvi/3D-Castellvi-Prediction/src/dataset/Castellvi_list_v2.xlsx'
+    master_list = str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_v2.xlsx'))
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    #processor._get_cutout(sample,return_seg = False, max_shape=(128, 86, 136),save_dir = WORKING_DIR + "data", skip_existing=True)
-    processor._prepare_cutouts(save_dir = WORKING_DIR + "data", n_jobs=8, skip_existing=True)
-
-
-    
+    processor._prepare_cutouts(n_jobs=8, skip_existing=True)
     
 if __name__ == "__main__":
      main()
