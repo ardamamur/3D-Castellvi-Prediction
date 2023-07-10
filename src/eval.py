@@ -12,9 +12,6 @@ import torch
 from torch import nn
 from utils.environment_settings import env_settings
 
-# Append path to import custom modules
-sys.path.append('/data1/practical-sose23/castellvi/castellvi_prediction/bids')
-
 # Custom module imports
 from utils._prepare_data import DataHandler
 from utils._get_model import *
