@@ -154,6 +154,14 @@ class Eval:
         # get the prediction from the model
         prediction = model(input)
         return prediction
+    
+    def get_f1_score(self, y_true, y_pred):
+        f1 = f1_score(y_true, y_pred, average='weighted')
+        return f1
+    
+    def get_confusion_matrix(self, y_true, y_pred):
+        cm = confusion_matrix(y_true, y_pred)
+        return cm
 
 
     def get_results_df(self):
@@ -310,6 +318,21 @@ def main(params, ckpt_path=None):
     print('Cohen\'s Kappa: ', ck)
     print('Matthews Correlation Coefficient: ', mcc)
 
+    # TODO : Save the statistics in a csv file for each version
+    # check if the file exists
+    if not os.path.isfile('metrics.csv'):
+        # Initialize an empty DataFrame
+        metrics_df = pd.DataFrame(columns=['version', 'confusion_matrix', 'f1_score', 'cohen_kappa', 'mcc'])
+    else: # else it exists so append without writing the header
+        metrics_df = pd.read_csv('metrics.csv')
+    
+    # TODO : change confusion matrix to save as a string
+    confusion_matrix = np.array2string(cm, separator=', ')
+    # Append rows in DataFrame
+    metrics_df = metrics_df.append({'version': params.version_no, 'confusion_matrix': confusion_matrix, 'f1_score': f1, 'cohen_kappa': ck, 'mcc': mcc}, ignore_index=True)
+
+    # TODO : Save the statistics in a csv file for each version
+    metrics_df.to_csv('metrics.csv', index=False)
 
 
 
