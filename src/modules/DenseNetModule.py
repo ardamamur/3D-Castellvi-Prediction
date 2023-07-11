@@ -224,7 +224,7 @@ class DenseNet(pl.LightningModule):
             raise Exception("Not Implemented")
         
         num_classes = self.num_classes
-        return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained)
+        return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained, dropout_prob=self.opt.dropout_prob)
 
         
     def __str__(self):

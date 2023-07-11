@@ -208,7 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('--total_iterations', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
-    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--save_intervals', type=int, default=10)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--resume_path', default='')
@@ -238,6 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_zero_out', action='store_true')
     parser.add_argument('--gradual_freezing', action='store_true')
     parser.add_argument('--elastic_transform', action='store_true')
+    parser.add_argument('--dropout_prob', type=float, default=0.0)
     params = parser.parse_args()
 
 
