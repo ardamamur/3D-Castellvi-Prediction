@@ -245,7 +245,7 @@ class Eval:
         return acutal_r, actual_flip_r
 
 
-    def evaluate(self, path):
+    def evaluate(self, path, base_path):
         model = self.load_model(path, self.opt)
         processor = self.get_processor()
         test_subjects = self.get_test_subjects()
@@ -293,20 +293,21 @@ class Eval:
             # Initialize an empty DataFrame
             results_df = pd.DataFrame.from_dict(results, orient='index').T
             #print(results_df)
-            if not os.path.isfile('results.csv'):
-                results_df.to_csv('results.csv', index=False)
+            results_file = base_path + '/results.csv'
+            if not os.path.isfile(results_file):
+                results_df.to_csv(results_file, index=False)
             else: # else it exists so append without writing the header
-                results_df.to_csv('results.csv', mode='a', header=False, index=False)
+                results_df.to_csv(results_file, mode='a', header=False, index=False)
         return self.gt, self.preds
 
 
-def main(params, ckpt_path=None):
+def main(params, ckpt_path=None, base_path=None):
     evaluator = Eval(params)
     best_model= os.listdir(ckpt_path)[0]
     best_model_path = os.path.join(ckpt_path, best_model)
     
     # Run evaluation for each best model
-    gt, preds = evaluator.evaluate(path=best_model_path)
+    gt, preds = evaluator.evaluate(path=best_model_path, base_path=base_path)
     
     # Calculate Confusion Matrix, F1, Cohen's Kappa and Matthews Correlation Coefficient
     cm = confusion_matrix(gt, preds)
@@ -320,11 +321,12 @@ def main(params, ckpt_path=None):
 
     # TODO : Save the statistics in a csv file for each version
     # check if the file exists
-    if not os.path.isfile('metrics.csv'):
+    metrics_file = base_path + '/metrics.csv'
+    if not os.path.isfile(metrics_file):
         # Initialize an empty DataFrame
         metrics_df = pd.DataFrame(columns=['version', 'confusion_matrix', 'f1_score', 'cohen_kappa', 'mcc'])
     else: # else it exists so append without writing the header
-        metrics_df = pd.read_csv('metrics.csv')
+        metrics_df = pd.read_csv(metrics_file)
     
     # TODO : change confusion matrix to save as a string
     confusion_matrix = np.array2string(cm, separator=', ')
@@ -332,7 +334,7 @@ def main(params, ckpt_path=None):
     metrics_df = metrics_df.append({'version': params.version_no, 'confusion_matrix': confusion_matrix, 'f1_score': f1, 'cohen_kappa': ck, 'mcc': mcc}, ignore_index=True)
 
     # TODO : Save the statistics in a csv file for each version
-    metrics_df.to_csv('metrics.csv', index=False)
+    metrics_df.to_csv(metrics_file, index=False)
 
 
 
@@ -405,5 +407,6 @@ if __name__ == "__main__":
     parser.add_argument('--eval_type', type=str, default='test')
     
     params = parser.parse_args()
-    ckpt_path = params.experiments + '/baseline_models/' + params.model + '/best_models/version_' + str(params.version_no) 
-    main(params=params, ckpt_path=ckpt_path)
+    base_experiment = params.experiments + '/baseline_models/' + params.model
+    ckpt_path = base_experiment + '/best_models/version_' + str(params.version_no) 
+    main(params=params, ckpt_path=ckpt_path, base_path=base_experiment)

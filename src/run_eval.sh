@@ -3,7 +3,8 @@
 
 # set the environment variable
 export PYTHONWARNINGS="ignore"
-
+export CUDA_VISIBLE_DEVICES=3
+export PYTHONPATH=$PYTHONPATH:/data1/practical-sose23/castellvi/castellvi_prediction/bids
 
 
 python3 eval.py \
