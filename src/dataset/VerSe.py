@@ -93,6 +93,8 @@ class VerSe(Dataset):
 
         
         if record["flip"]:
+            # Flip 2b and 3b labels and 0 cases
+            #print("subject_name:", record["subject"])
             img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
 
         
@@ -101,7 +103,8 @@ class VerSe(Dataset):
         labels = self._get_label_based_on_conditions(record)
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
-        print('target:', record["subject"], 'flip:', record['flip'],  'label:', labels)
+        
+        #print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
         return {"target": inputs, "class": labels}
 
 
@@ -115,6 +118,8 @@ class VerSe(Dataset):
             return self._get_castellvi_right_side_label(record)
         elif self.classification_type == "multi_class":
             return self._get_castellvi_multi_labels(record)
+        elif self.classification_type == "right_side_binary":
+            return self._get_right_side_binary_label(record)
         else:
             raise ValueError("Invalid classification type")
 
@@ -144,7 +149,8 @@ class VerSe(Dataset):
         side = str(record['side'])
         flip = str(record['flip'])
 
-        if castellvi == '2b' or ((castellvi == '2a' and side == 'R')):
+        
+        if castellvi == '2b' or (castellvi == '2a' and side == 'R'):
             return 1
         
         elif castellvi == '3b' or (castellvi == '3a' and side == 'R'):
@@ -157,6 +163,14 @@ class VerSe(Dataset):
                 return 1  
         else:
             return 0
+        
+    def _get_right_side_binary_label(self, record):
+        """
+        Returns a binary label for right side classification. 0 if the right side label is 0 and 1 in all other cases.
+        Args:
+            record (dict): record to get the label for
+        """
+        return 0 if self._get_castellvi_right_side_label(record) == 0 else 1
 
     def _get_castellvi_multi_labels(self, record):
 
@@ -233,11 +247,11 @@ class VerSe(Dataset):
 
             transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
                                       RandAffine(translate_range=self.opt.translate_range, 
-                                                 shear_range=self.opt.shear_range,
                                                 rotate_range=np.deg2rad(self.opt.rotate_range),
                                                 scale_range=(float(self.opt.scale_range[0]),float(self.opt.scale_range[1])),
                                                 prob=self.opt.aug_prob)
                                     )
+            
 
         return transformations
     

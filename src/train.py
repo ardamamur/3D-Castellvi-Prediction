@@ -1,15 +1,16 @@
-import os
+import os, sys
 import torch
 import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tensorboard import program
-from utils._prepare_data import DataHandler, read_config
+from utils._prepare_data import DataHandler
 from modules.ResNetModule import ResNet
 from modules.VerSeDataModule import VerSeDataModule
 from modules.DenseNetModule import DenseNet
 from modules.DenseNetModule_v2 import DenseNetV2
+from utils.environment_settings import env_settings
 
 def get_model_class(model_name:str):
     model_classes = {
@@ -30,7 +31,7 @@ def run_cross_validation(params, current_fold):
     # Instantiate model
     model = ModelClass(opt=params,
                        num_classes=params.num_classes,
-                       data_size=(128,86,136),
+                       data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
                        data_channel=1
                        ).cuda()
     
@@ -39,11 +40,11 @@ def run_cross_validation(params, current_fold):
     logger = TensorBoardLogger(experiment, default_hp_metric=False)
     # TODO: Add early stopping
     checkpoint_callback = ModelCheckpoint(
-        monitor='val_loss',
+        monitor='val_mcc',
         dirpath=f'{experiment}/best_models/version_{logger.version}',
-        filename=params.model + '-{epoch:02d}-{val_loss:.2f}' + '-' + str(current_fold),
-        save_top_k = 1,
-        mode='min',
+        filename=params.model + '-{epoch:02d}-{val_mcc:.2f}' + '-' + str(current_fold),
+        save_top_k = 3,
+        mode='max',
     )
 
     # Create trainer
@@ -77,7 +78,7 @@ def main(params):
         # Instantiate model
         model = ModelClass(opt=params,
                         num_classes=params.num_classes,
-                        data_size=(128,86,136),
+                        data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
                         data_channel=1
                         ).cuda()
 
@@ -87,11 +88,11 @@ def main(params):
         
         # TODO: Add early stopping
         checkpoint_callback = ModelCheckpoint(
-            monitor='val_loss',
+            monitor='val_mcc',
             dirpath=f'{experiment}/best_models/version_{logger.version}',
-            filename=params.model + '-{epoch:02d}-{val_loss:.2f}',
-            save_top_k=1,
-            mode='min',
+            filename=params.model + '-{epoch:02d}-{val_mcc:.2f}',
+            save_top_k=3,
+            mode='max',
         )
 
         # Create trainer
@@ -101,6 +102,7 @@ def main(params):
                             devices=params.n_devices,
                             log_every_n_steps=min(32, params.batch_size),
                             callbacks=[checkpoint_callback],
+                            accumulate_grad_batches=params.accumulate_grad_batches,
                             logger=logger)
         # Start tensorboard
         try:
@@ -176,19 +178,25 @@ def start_tensorboard(port, tracking_address: str):
 
 if __name__ == '__main__':
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+    if env_settings.CUDA_VISIBLE_DEVICES is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(env_settings.CUDA_VISIBLE_DEVICES)
+
+    if env_settings.BIDS_PATH is not None:
+        sys.path.append(env_settings.BIDS_PATH)
 
     if torch.cuda.is_available():
-        print('Running on GPU #', os.environ["CUDA_VISIBLE_DEVICES"])
+        print('Running on GPU #' + str(torch.cuda.current_device()))
     else:
         print('Running on CPU')
 
     
     parser = argparse.ArgumentParser(description='Training settings')
-    parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20'])
+    parser.add_argument('--data_root', nargs='+', default=[str(os.path.join(env_settings.DATA, 'dataset-verse19')),
+                                                           str(os.path.join(env_settings.DATA, 'dataset-verse20')),
+                                                           str(os.path.join(env_settings.DATA, 'dataset-tri'))])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
+    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split.xlsx')))
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
@@ -199,16 +207,17 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=0.0001)
     parser.add_argument('--total_iterations', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--save_intervals', type=int, default=10)
-    parser.add_argument('--n_epochs', type=int, default=1)
+    parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--resume_path', default='')
-    parser.add_argument('--experiments', default='/u/home/ank/3D-Castellvi-Prediction/experiments')
-    parser.add_argument('--gpu_id', default='3')
+    parser.add_argument('--experiments', default=env_settings.EXPERIMENTS)
+    parser.add_argument('--gpu_id', default='0')
     parser.add_argument('--n_devices', type=int, default=1)
     parser.add_argument('--manual_seed', type=int, default=1)
     parser.add_argument('--num_classes', type=int, default=3)
-    parser.add_argument('--port', type=int, default=1999)
+    parser.add_argument('--port', type=int, default=2023)
     parser.add_argument('--model_type', type=str, default='')
 
 
