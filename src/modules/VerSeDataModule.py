@@ -27,24 +27,29 @@ class VerSeDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         # Assign train/val datasets for use in dataloaders
-        records = self.processor.verse_records
+        #records = self.processor.verse_records
+        tri_records = self.processor.tri_records
+        verse_records = self.processor.verse_records
+        records = tri_records + verse_records
         print(f"Total records: {len(records)}")
 
         if not self.opt.cross_validation:
             if not self.opt.flip_all:
                 # # remove recorde if their flip value is 1 and castellvi value does not contain 'a'
-                records = [record for record in records if record["flip"] == 1 and (record["castellvi"]!='2a' or record["castellvi"]!='3a')]
+                #records = [record for record in records if record["flip"] == 1 and (record["castellvi"]!='2a' or record["castellvi"]!='3a')]
                 print("----------------------------------------------------------------------------------")
                 print(f"Total records after removing non-flipped records: {len(records)}")
 
-            for record in records:
+            for index in range(len(records)):
+                record = records[index]
+                print(record)
                 if record["dataset_split"] == "train":
                     self.train_records.append(record)
                 elif record["dataset_split"] == "val":
                     self.val_records.append(record)
                 elif record["dataset_split"] == "test":
-                    self.val_records.append(record)
-                    self.val_records.append(record)
+                    #TODO: remove this
+                    pass
                 else:
                     raise ValueError("Invalid split value {} in record: {}".format(record["dataset_split"], record["subject"]))
                 
@@ -138,7 +143,7 @@ class VerSeDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         if self.weighted_sample: 
             sampler = self._get_sampler(self.train_dataset)
-            return DataLoader(self.train_dataset, batch_size=self.batch_size, sampler = sampler)
+            return DataLoader(self.train_dataset, batch_size=self.batch_size, sampler = sampler, num_workers=self.num_workers)
         else:
             return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle = True, num_workers = self.num_workers)
 

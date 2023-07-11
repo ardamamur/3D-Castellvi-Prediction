@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 from utils._prepare_data import DataHandler
-from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic, RandAffine
-
+from monai.transforms import Compose, CenterSpatialCrop, Rand3DElastic, RandAffine, RandGaussianNoise, NormalizeIntensity
+from scipy import ndimage
+import torch
 
 
 class VerSe(Dataset):
@@ -27,12 +28,12 @@ class VerSe(Dataset):
         '''
         self.opt = opt
         self.processor = processor
-        self.pad_size = (128,86,136) #pad_size
         self.use_seg = opt.use_seg #use_seg
         self.use_bin_seg = opt.use_bin_seg
         self.use_zero_out = opt.use_zero_out
         self.training = training
         self.classification_type = opt.classification_type 
+        self.pad_size = (96,78,78) if (self.classification_type == "right_side" or self.classification_type == "right_side_binary") else (128,86,136)
         self.transformations = self.get_transformations()
         self.test_transformations = self.get_test_transformations()
         self.records = records
@@ -62,7 +63,11 @@ class VerSe(Dataset):
 
         record = self.records[index] 
 
-        img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+        if self.classification_type == "right_side" or self.classification_type == "right_side_binary":
+            img = self.processor._get_right_side_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size)
+        
+        else:
+            img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
 
 
 
@@ -83,7 +88,10 @@ class VerSe(Dataset):
 
         elif self.use_zero_out:
             #We need the segmentation mask to create the boolean zero-out mask, TODO: Use seg-subreg mask in future for better details
-            seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+            if self.classification_type == "right_side" or self.classification_type == "right_side_binary":
+                seg = self.processor._get_right_side_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size)
+            else:
+                seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
             l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
             l_mask = seg == l_idx #create a mask for values belonging to lowest L
             sac_mask = seg == 26 #Sacrum is always denoted by value of 26
@@ -94,15 +102,27 @@ class VerSe(Dataset):
         
         if record["flip"]:
             # Flip 2b and 3b labels and 0 cases
-            print("subject_name:", record["subject"])
+            #print("subject_name:", record["subject"])
             img = np.flip(img, axis=2).copy() # Flip the image along the z-axis. In other words, flip the image horizontally.
 
         
+        #add channel dimension
         img = img[np.newaxis, ...]         
+        #convert img from numpy array to torch tensor
+        img = torch.from_numpy(img)
+
         # Get the label
         labels = self._get_label_based_on_conditions(record)
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
+        
+        #print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
+        
+
+        #cast input to float tensor and label to long tensor
+        inputs = inputs.float()
+        labels = torch.tensor(labels).long()
+
 
         return {"target": inputs, "class": labels}
 
@@ -117,6 +137,8 @@ class VerSe(Dataset):
             return self._get_castellvi_right_side_label(record)
         elif self.classification_type == "multi_class":
             return self._get_castellvi_multi_labels(record)
+        elif self.classification_type == "right_side_binary":
+            return self._get_right_side_binary_label(record)
         else:
             raise ValueError("Invalid classification type")
 
@@ -126,7 +148,7 @@ class VerSe(Dataset):
             return 1
         else:
             return 0
-
+        
     def _get_castellvi_right_side_label(self, record):
 
         """
@@ -144,15 +166,30 @@ class VerSe(Dataset):
 
         castellvi = str(record["castellvi"])
         side = str(record['side'])
+        flip = str(record['flip'])
 
-        if castellvi == '2b' or ((castellvi == '2a' and side == 'R')):
+        
+        if castellvi == '2b' or (castellvi == '2a' and side == 'R'):
             return 1
         
         elif castellvi == '3b' or (castellvi == '3a' and side == 'R'):
             return 2
         
+        elif castellvi == '4':
+            if side == 'R':
+                return 2
+            else:
+                return 1  
         else:
             return 0
+        
+    def _get_right_side_binary_label(self, record):
+        """
+        Returns a binary label for right side classification. 0 if the right side label is 0 and 1 in all other cases.
+        Args:
+            record (dict): record to get the label for
+        """
+        return 0 if self._get_castellvi_right_side_label(record) == 0 else 1
 
     def _get_castellvi_multi_labels(self, record):
 
@@ -213,7 +250,7 @@ class VerSe(Dataset):
         if self.opt.elastic_transform:
 
             transformations = Compose([
-                                        CenterSpatialCrop(roi_size=[128,86,136]),
+                                        CenterSpatialCrop(roi_size=self.pad_size),
                                         Rand3DElastic(
                                             prob=0.5,
                                             sigma_range=(5, 8),
@@ -222,23 +259,25 @@ class VerSe(Dataset):
                                             shear_range=self.opt.shear_range,  # Shear range
                                             translate_range=self.opt.translate_range,  # Translation range
                                             scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
-                                            spatial_size=[128, 86, 136],
+                                            spatial_size=self.pad_size,
+                                            device=torch.device("cuda:0"),
                                         )
                                     ])
         else:
 
-            transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])],
-                                    # Random Rotoation with degree 10
-                                    #RandRotate(range_x = self.opt.rotate_range, range_y = self.opt.rotate_range, range_z = self.opt.rotate_range, prob = 0.5),
-                                    # Random Translation with 10% probability
-                                    RandAffine(translate_range=self.opt.translate_range, rotate_range=np.deg2rad(self.opt.rotate_range), prob=self.opt.aug_prob),
-                                    RandRotate)
+            transformations = Compose([CenterSpatialCrop(roi_size=self.pad_size)],
+                                      RandAffine(translate_range=self.opt.translate_range, 
+                                                rotate_range=np.deg2rad(self.opt.rotate_range),
+                                                scale_range=(float(self.opt.scale_range[0]),float(self.opt.scale_range[1])),
+                                                prob=self.opt.aug_prob)
+                                    )
+            
 
         return transformations
     
 
     def get_test_transformations(self):
-        transformations = Compose([CenterSpatialCrop(roi_size=[128,86,136])])
+        transformations = Compose([CenterSpatialCrop(roi_size=self.pad_size)])
         return transformations
     
 
