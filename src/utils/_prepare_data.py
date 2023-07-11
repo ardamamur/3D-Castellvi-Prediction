@@ -201,7 +201,7 @@ class DataHandler:
         return ap_slice, lr_slice, is_slice
 
 
-    def _get_cutout(self, record, return_seg, max_shape, skip_existing = True):
+    def _get_cutout(self, record, return_seg, max_shape = (128, 86, 136), skip_existing = True):
         """
         Args:
             BIDS Family, return_seg (instead of ct), max_shape
@@ -353,79 +353,141 @@ class DataHandler:
 
         return record["subject"]
 
-    def _max_shape_job(self, family):
+    def _get_max_shape(self):
         """
         Args:
-            list of families to handle.
+            None
         Returns:
-            The maximum shape of the cutouts over the list
+            The maximum shape of all ROI's in the dataset to be used as cutout shape for all subjects.
         """
 
-        max_shape = [0,0,0]
-
-        seg_nii = family["msk_seg-vertsac"][0].open_nii()
-        ctd = family["ctd_seg-vertsac"][0].open_cdt()
-        ctd.zoom = seg_nii.zoom
-
-        seg_arr = seg_nii.reorient(axcodes_to=('P', 'I', 'R'), verbose = False).get_array()
-        ctd = ctd.reorient(axcodes_to=('P', 'I', 'R'), _shape = seg_nii.shape, verbose = False)
-
-        seg_arr = seg_nii.get_array()
-            
-        lowest_L_idx = 25 if 25 in ctd else 24 if 24 in ctd else 23 if 23 in ctd else None
-        assert(lowest_L_idx != None)
-
-        lowest_L_mask = np.where(seg_arr == lowest_L_idx)
-
-        ap_size = (lowest_L_mask[0].max() - lowest_L_mask[0].min()) * seg_nii.zoom[0]
-        lr_size = (lowest_L_mask[2].max() - lowest_L_mask[2].min()) * seg_nii.zoom[2]
-
-        prev_L_idx = lowest_L_idx - 1
-        sac_idx = 26
-
-        is_size = 0 if not (prev_L_idx in ctd.centroids.keys() and sac_idx in ctd.centroids.keys()) else (ctd.centroids[sac_idx][1] - ctd.centroids[prev_L_idx][1]) * seg_nii.zoom[1]
-
-        return max(max_shape, [ap_size, is_size, lr_size])
-
-        
-
-    def _get_max_shape(self, multi_family_subjects, n_jobs = 8):
+    def _get_right_side_max_shape(self, ROI_max_shape):
         """
         Args:
-            subject name
-        Return:
-            the maximum shape within the subjects
+            None
+        Returns:
+            tuple(int, int, int): The maximum shape of all ROIs for right-side classification of the dataset to be used as cutout s
+        """
+        ap_size = 0
+        is_size = 0
+        lr_size = 0
 
-        Be sure to drop missing subjects before running this function
+        for record in (self.verse_records + self.verse_records):
+            if record["flip"]:
+                continue
+            else:
+                ap_slice, is_slice, lr_slice = self._get_right_side_slice(record, ROI_max_shape)
+                ap_size = max(ap_size, ap_slice.stop - ap_slice.start)
+                is_size = max(is_size, is_slice.stop - is_slice.start)
+                lr_size = max(lr_size, lr_slice.stop - lr_slice.start)
+
+        return (ap_size, is_size, lr_size)
+
+    
+    def _get_right_side_slice(self, record, ROI_max_shape):
+        """
+        Args:
+            None
+        Returns:
+            tuple(slice, slice, slice): The slice to be applied to the first ROI cutout (of size ROI_max_shape), to get the right-side cutout.
+        Description:
+            If training on right side only and using zero out, the cutout is inflated by a lot of zero values. This function computes the maximum shape of all ROIs for right-side classification of the dataset to be used as cutout shape for all subjects.
+            It is important to note that this slice needs to be applied to the first ROI cutout (of size ROI_max_shape), not the overall image.
         """
 
-        families = []
-
-        for subject in tqdm(self.bids.subjects):
-            if not self._is_multi_family(subject, families=multi_family_subjects):
-                sub_name, exists = self._get_subject_name(subject=subject)
-                if exists:
-                    family = self._get_subject_family(subject=subject)
-                    families.append(family)
-                    
-        max_shapes = pqdm(families, self._max_shape_job, n_jobs = n_jobs)
-        max_shapes = [[0,0,0] if type(shape) != list else shape for shape in max_shapes]
-        max_shapes = np.array(max_shapes)
-
-        return max_shapes.max(axis = 0)
     
+        _, seg, ctd = self.get_ct_seg_ctd_cutout(record, max_shape=ROI_max_shape)
+        seg = seg.get_array()
+        last_L = 25 if 25 in seg else 24 if 24 in seg else 23 if 23 in seg else None
+        assert last_L is not None, "No last lumber vertebra found in subject {}".format(record["subject"])
+        assert 26 in seg, "No sacrum found in subject {}".format(record["subject"])
+        mask = (seg == last_L) + (seg == 26)
+        #get min and max indices of mask in each dimension
+        min_ap = np.min(np.where(np.any(mask, axis = (1,2)))[0])
+        max_ap = np.max(np.where(np.any(mask, axis = (1,2)))[0])
+        min_is = np.min(np.where(np.any(mask, axis = (0,2)))[0])
+        max_is = np.max(np.where(np.any(mask, axis = (0,2)))[0])
+        min_lr = np.min(np.where(np.any(mask, axis = (0,1)))[0])
+        max_lr = np.max(np.where(np.any(mask, axis = (0,1)))[0])
+
+        centroids = ctd.centroids
+        last_L_centroid = centroids[last_L]
+
+        #If the record should be flipped, we want to keep the left sice, i.e. everything smaller than the last_L's centroid in LR-direction, and vice versa for unflipped images!
+        if record["flip"]:
+            max_lr = int(last_L_centroid[2])
+        else:
+            min_lr = int(last_L_centroid[2])
+
+        #We also cut off the bottom of the cutout at the centroid of the sacrum (if present), so we discard bigger values, since the orientation is (P, I, R).
+        if 26 in centroids:
+            sacrum_centroid = centroids[26]
+            max_is = int(sacrum_centroid[1])
+
+        #We can also remove values smaller than the last_L's centroids in AP-direction, since the processus transversus is always posterior to the centroid of the vertebra.
+        min_ap = int(last_L_centroid[0])
+
+               
+        ap_slice = slice(min_ap, max_ap + 1)
+        is_slice = slice(min_is, max_is + 1)
+        lr_slice = slice(min_lr, max_lr + 1)
+
+        return ap_slice, is_slice, lr_slice
+    
+    def _get_right_side_cutout(self, record, return_seg, max_shape = (96, 78, 78), ROI_max_shape = (128, 86, 136)):
+        """
+        Args:
+            record (dict): Record of subject to get the right-side cutout for. Use for right-side classification with zero out only.
+            max_shape (tuple(int, int, int)): Maximum shape of all ROIs for right-side classification of the dataset to be used as cutout shape for all subjects.
+        """
+        ap_slice, is_slice, lr_slice = self._get_right_side_slice(record, ROI_max_shape)
+
+        #Now we adapt the slices to achieve the target_shape
+        if max_shape:
+            ap_increase = max(max_shape[0] - (ap_slice.stop - ap_slice.start), 0)
+            lr_increase = max(max_shape[2] - (lr_slice.stop - lr_slice.start), 0)
+            is_increase = max(max_shape[1] - (is_slice.stop - is_slice.start), 0)
+
+            ap_slice = slice(ap_slice.start - int(ap_increase / 2), ap_slice.stop + (ap_increase - int(ap_increase / 2)))
+            lr_slice = slice(lr_slice.start - int(lr_increase / 2), lr_slice.stop + (lr_increase - int(lr_increase / 2)))
+            is_slice = slice(is_slice.start - int(is_increase / 2), is_slice.stop + (is_increase - int(is_increase / 2)))
+
+        if max_shape:
+            assert(ap_slice.stop-ap_slice.start == max_shape[0])
+            assert(lr_slice.stop-lr_slice.start == max_shape[2])
+            assert(is_slice.stop-is_slice.start == max_shape[1])
+
+        #Replace negative values with 0
+        ap_slice = slice(max(ap_slice.start, 0), max(ap_slice.stop, 0))
+        lr_slice = slice(max(lr_slice.start, 0), max(lr_slice.stop, 0))
+        is_slice = slice(max(is_slice.start, 0), max(is_slice.stop, 0))
+
+        if return_seg:
+            seg = self._get_cutout(record, return_seg = True, max_shape = ROI_max_shape)
+            seg_cutout = seg[ap_slice, is_slice, lr_slice]
+            #Now we pad to final size
+            seg_cutout = np.pad(seg_cutout, [(0, max_shape[i] - seg_cutout.shape[i]) for i in range(len(seg_cutout.shape))],"constant")
+            return seg_cutout
+        else:
+            ct = self._get_cutout(record, return_seg = False, max_shape = ROI_max_shape)
+            ct_cutout = ct[ap_slice, is_slice, lr_slice]
+            #Now we pad to final size
+            ct_cutout = np.pad(ct_cutout, [(0, max_shape[i] - ct_cutout.shape[i]) for i in range(len(ct_cutout.shape))],"constant")
+            return ct_cutout
+
+
 
 def main():
     #Run this script to prepare the cutouts. Cutouts are generated "on the fly" when running the training script, but preparing them in advance saves time due to parallelization.
-    dataset = [str(os.path.join(env_settings.DATA_DIR, 'dataset-verse19')),
-               str(os.path.join(env_settings.DATA_DIR, 'dataset-verse20')),
-               str(os.path.join(env_settings.DATA_DIR, 'dataset-tri'))]
+    dataset = [str(os.path.join(env_settings.DATA, 'dataset-verse19')),
+               str(os.path.join(env_settings.DATA, 'dataset-verse20')),
+               str(os.path.join(env_settings.DATA, 'dataset-tri'))]
     
     data_types = ['rawdata',"derivatives"]
     image_types = ["ct", "subreg"]
-    master_list = str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_v2.xlsx'))
+    master_list = str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split.xlsx'))
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    processor._prepare_cutouts(n_jobs=8, skip_existing=True)
+    print(processor._get_right_side_max_shape(ROI_max_shape=(128, 86, 136)))
     
 if __name__ == "__main__":
      main()

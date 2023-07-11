@@ -22,7 +22,7 @@ from dataset.VerSe import *
 class Eval:
     def __init__(self, opt) -> None:
         self.opt = opt
-        self.data_size = (128, 86, 136)
+        self.data_size = (96,78,78) if (opt.classification_type == "right_side" or opt.classification_type == "right_side_binary") else (128,86,136)
         self.num_classes = opt.num_classes
         self.softmax = nn.Softmax(dim=1)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
