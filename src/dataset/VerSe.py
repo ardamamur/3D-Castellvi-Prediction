@@ -265,8 +265,6 @@ class VerSe(Dataset):
         else:
 
             transformations = Compose([CenterSpatialCrop(roi_size=self.pad_size)],
-                                      NormalizeIntensity(nonzero=True, channel_wise=True),
-                                      RandGaussianNoise(prob=self.opt.aug_prob, mean=0.0, std=0.1),
                                       RandAffine(translate_range=self.opt.translate_range, 
                                                 rotate_range=np.deg2rad(self.opt.rotate_range),
                                                 scale_range=(float(self.opt.scale_range[0]),float(self.opt.scale_range[1])),
