@@ -31,7 +31,7 @@ def run_cross_validation(params, current_fold):
     # Instantiate model
     model = ModelClass(opt=params,
                        num_classes=params.num_classes,
-                       data_size=(128,86,136),
+                       data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
                        data_channel=1
                        ).cuda()
     
@@ -78,7 +78,7 @@ def main(params):
         # Instantiate model
         model = ModelClass(opt=params,
                         num_classes=params.num_classes,
-                        data_size=(128,86,136),
+                        data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
                         data_channel=1
                         ).cuda()
 
