@@ -126,6 +126,7 @@ class Eval:
         records = verse_records + tri_records
         for index in range(len(records)):
             record = records[index]
+            # print('record:', record['subject'])
             # check if any element in test subhjects contains the subject in record
             if any(record['subject'] in s for s in test_subjects):
                 # check for the flip value
@@ -156,7 +157,14 @@ class Eval:
         # get the prediction from the model
         prediction = model(input)
         return prediction
-
+    
+    def get_f1_score(self, y_true, y_pred):
+        f1 = f1_score(y_true, y_pred, average='weighted')
+        return f1
+    
+    def get_confusion_matrix(self, y_true, y_pred):
+        cm = confusion_matrix(y_true, y_pred)
+        return cm
 
     def get_results_df(self):
         path = self.opt.results_df
@@ -192,26 +200,64 @@ class Eval:
             lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
             img = img * lsac_mask
 
-        flipped_img = np.flip(img, axis=2).copy()
+        
+        # l_idx = 25 if 25 in img else 24 if 24 in img else 23
+        # # sacrum part
+        # sacrum_seg = np.where(img == 26)
+        # # dilate the sacrum seg
+        # sacrum_dilated_seg = ndimage.binary_dilation(sacrum_seg, iterations=2)
+        # sacrum_dilated_seg = sacrum_dilated_seg*26
+        # # erosion the sacrum seg
+        # sacrum_erosin_seg = ndimage.binary_erosion(sacrum_seg, iterations=2)
+        # sacrum_erosin_seg = sacrum_erosin_seg*26
+        
+
+
+        # # last L
+        # last_l_seg = np.where(img == l_idx)
+        # # dilate the last L seg
+        # last_l_dilated_seg = ndimage.binary_dilation(last_l_seg, iterations=2)
+        # last_l_dilated_seg = last_l_dilated_seg*l_idx
+        # # erosion the last L seg
+        # last_l_erosion_seg = ndimage.binary_erosion(last_l_seg, iterations=2)
+        # last_l_erosion_seg = last_l_erosion_seg*l_idx
+
+        # # combine dilated and eroded sacrum and last L seg
+        # combined_dilated_seg =  last_l_dilated_seg + sacrum_dilated_seg
+        # combined_erosion_seg = last_l_erosion_seg + sacrum_erosin_seg
+
+
+        # flip the image
+        flipped_img = np.flip(img, axis=2)
 
         img = img[np.newaxis,np.newaxis, ...]
         flipped_img = flipped_img[np.newaxis, np.newaxis, ...]
+        # combined_dilated_seg = combined_dilated_seg[np.newaxis, np.newaxis, ...]
+        # combined_erosion_seg = combined_erosion_seg[np.newaxis, np.newaxis, ...]
 
         # Convert to tensor
         img = img.astype(np.float32) 
-        flipped_img = flipped_img.astype(np.float32) 
+        flipped_img = flipped_img.astype(np.float32)
+        # combined_dilated_seg = combined_dilated_seg.astype(np.float32)
+        # combined_erosion_seg = combined_erosion_seg.astype(np.float32)  
         img = torch.from_numpy(img)
         flipped_img = torch.from_numpy(flipped_img)
+        # combined_dilated_seg = torch.from_numpy(combined_dilated_seg)
+        # combined_erosion_seg = torch.from_numpy(combined_erosion_seg)
 
         # Convert to float
         img = img.float()
         flipped_img = flipped_img.float()
+        # combined_dilated_seg = combined_dilated_seg.float()
+        # combined_erosion_seg = combined_erosion_seg.float()
 
         # Move to GPU
         img = img.to(self.device)
         flipped_img = flipped_img.to(self.device)
+        # combined_dilated_seg = combined_dilated_seg.to(self.device)
+        # combined_erosion_seg = combined_erosion_seg.to(self.device)
 
-        return img, flipped_img
+        return img, flipped_img #, combined_dilated_seg, combined_erosion_seg
     
 
     def get_actual_labels(self, record):
@@ -245,7 +291,8 @@ class Eval:
         test_subjects = self.get_test_subjects()
         records = self.get_records(processor, test_subjects)
 
-        for record in records:
+        for index in range(len(records)):
+            record = records[index]
             # get input image
             input_img, flipped_img = self.process_input(processor, record)
             self.gt.append(record['castellvi'])
@@ -255,6 +302,8 @@ class Eval:
                 # get the output from the model
                 output = self.get_model_output(model, input_img)
                 flipped_output = self.get_model_output(model, flipped_img)
+                # dilated_output = self.get_model_output(model, dilated_img)
+                # erosion_output = self.get_model_output(model, erosion_img)
 
                 # apply softmax to get probabilities
                 output_probabilities = self.apply_softmax(output)
@@ -302,13 +351,13 @@ def main(params, ckpt_path=None):
     # Run evaluation for each best model
     gt, preds = evaluator.evaluate(path=best_model_path)
     
-    # f1 = evaluator.get_f1_score(gt, preds)
-    # cm = evaluator.get_confusion_matrix(gt, preds)
+    f1 = evaluator.get_f1_score(gt, preds)
+    cm = evaluator.get_confusion_matrix(gt, preds)
 
-    # print('Version Number:', params.version_no)
+    print('Version Number:', params.version_no)
     # print("Model: ", ckpt_path)
-    # print("F1 score: ", f1)
-    # print("Confusion matrix: \n ", cm)
+    print("F1 score: ", f1)
+    print("Confusion matrix: \n ", cm)
 
 
 
@@ -318,11 +367,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Evaluation settings')
     parser.add_argument('--data_root', nargs='+', default=['/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse19', 
-                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20', 
+                                                           '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-verse20',
                                                            '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/VerSe_masterlist_V4.xlsx')
+    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/Castellvi_list_v2.xlsx')
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
@@ -343,7 +392,7 @@ if __name__ == "__main__":
     parser.add_argument('--manual_seed', type=int, default=1)
     parser.add_argument('--num_classes', type=int, default=3)
     parser.add_argument('--port', type=int, default=6484)
-    parser.add_argument('--dataset', nargs='+', default=['verse'])
+    parser.add_argument('--dataset', nargs='+', default=['verse', 'tri'])
     parser.add_argument('--eval_type', type=str, default='test')
     parser.add_argument('--results_df', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv')
 
