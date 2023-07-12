@@ -65,7 +65,7 @@ class Eval:
         return prediction_mapping
 
     def get_label_map(self, map: str = 'final_class'):
-        if self.opt.classification_type == "right_side":
+        if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary":
             if map == 'final_class':
                 prediction_mapping = self.get_final_class_prediction_mapping()
 
@@ -103,6 +103,7 @@ class Eval:
         masterlist = masterlist[masterlist['Full_Id'].str.contains('|'.join(self.opt.dataset))]
         if self.opt.eval_type != 'all':
             # return the subjects if FullId contains any substring from dataset array 
+            print('eval type is not all')
             masterlist = masterlist[masterlist['Split'].isin(['val'])]
         else:
             masterlist = masterlist[masterlist['Split'].isin(['test', 'val', 'train'])]
@@ -153,7 +154,8 @@ class Eval:
     
 
     def get_model_output(self, model, input):
-        # get the prediction from the model
+        # get the prediction from the mode
+        print('input shape:', input.shape)
         prediction = model(input)
         return prediction
     
@@ -180,13 +182,98 @@ class Eval:
         img = img * v_index
         return img
     
+    def get_dilated_input(self, sacrum_seg, last_l_seg, s_idx, l_idx, iterations=2):
+        dilated_sacrum_seg = self.dilate_image(sacrum_seg, s_idx, iterations=iterations)
+        dilated_last_l_seg = self.dilate_image(last_l_seg, l_idx, iterations=iterations)
+        dilated_img = dilated_sacrum_seg + dilated_last_l_seg
+        return dilated_img
+    
     def erosion_image(self, img, v_index, iterations=2):
         img = ndimage.binary_erosion(img, iterations=iterations)
         img = img * v_index
         return img
+    
+    def get_eroded_input(self, sacrum_seg, last_l_seg, s_idx, l_idx, iterations=2):
+        eroded_sacrum_seg = self.erosion_image(sacrum_seg, s_idx, iterations=iterations)
+        eroded_last_l_seg = self.erosion_image(last_l_seg, l_idx, iterations=iterations)
+        eroded_img = eroded_sacrum_seg + eroded_last_l_seg
+        return eroded_img
+    
+    def convert_to_tensor(self, img):
+        img = img[np.newaxis,np.newaxis, ...]
+        img = img.astype(np.float32) 
+        img = torch.from_numpy(img)
+        img = img.float()
+        img = img.to(self.device)
+        return img
+    
+    def flip_image(self, img):
+        img = np.flip(img, axis=2)
+        return img
+    
+
+    def get_sacrum_segmentation(self, img):
+        s_idx = 26
+        sacrum_seg = np.where(img == s_idx)
+        return sacrum_seg, s_idx
+    
+    def get_last_lumbar_segmentation(self, img):
+        l_idx = 25 if 25 in img else 24 if 24 in img else 23
+        last_lumbar_seg = np.where(img == l_idx)
+        return last_lumbar_seg, l_idx
+    
+    def get_model_inputs(self, img):
+        """
+        input_types: list of strings
+                    ["dilation", "erosion", "original"]
+        """
+        model_inputs = {
+            "original": None,
+            "dilation": None,
+            "erosion": None,
+            "flipped": None,
+            "flipped_dilation": None,
+            "flipped_erosion": None
+        }
+        original_img = img.copy()
+        sacrum_seg, s_idx = self.get_sacrum_segmentation(original_img)
+        last_l_seg, l_idx = self.get_last_lumbar_segmentation(original_img)
+
+        flipped_img = self.flip_image(img.copy())
+        flipped_sacrum_seg, flipped_s_idx = self.get_sacrum_segmentation(flipped_img)
+        flipped_last_l_seg, flipped_l_idx = self.get_last_lumbar_segmentation(flipped_img)
+
+        original_img_tensor = self.convert_to_tensor(original_img)
+        flipped_img_tensor = self.convert_to_tensor(flipped_img)
+
+        model_inputs["original"] = original_img_tensor
+        model_inputs["flipped"] = flipped_img_tensor
+
+  
+        if self.opt.seg_comparison:
+            # Get dilated images
+            dilated_img = self.get_dilated_input(sacrum_seg, last_l_seg, s_idx, l_idx)
+            flipped_dilated_img = self.get_dilated_input(flipped_sacrum_seg, flipped_last_l_seg, flipped_s_idx, flipped_l_idx)
+            print(dilated_img.shape, flipped_dilated_img.shape)
+
+            # Get eroded images
+            eroded_img = self.get_eroded_input(sacrum_seg, last_l_seg, s_idx, l_idx)
+            flipped_eroded_img = self.get_eroded_input(flipped_sacrum_seg, flipped_last_l_seg, flipped_s_idx, flipped_l_idx)
+
+            model_inputs["dilation"] = self.convert_to_tensor(dilated_img)
+            model_inputs["erosion"] = self.convert_to_tensor(eroded_img)
+            model_inputs["flipped_dilation"] = self.convert_to_tensor(flipped_dilated_img)
+            model_inputs["flipped_erosion"] = self.convert_to_tensor(flipped_eroded_img)
+
+        return model_inputs
 
     def process_input(self, processor, record):
-        img = processor._get_cutout(record,return_seg=self.opt.use_seg, max_shape=self.data_size)
+
+        if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary":
+            img = processor._get_right_side_cutout(record,return_seg=self.opt.use_seg, max_shape=self.data_size)
+        else:
+            img = processor._get_cutout(record,return_seg=self.opt.use_seg, max_shape=self.data_size)
+        
         if self.opt.use_seg:
             if self.opt.use_zero_out:
                 l_idx = 25 if 25 in img else 24 if 24 in img else 23
@@ -202,85 +289,20 @@ class Eval:
                 
         elif self.opt.use_zero_out:
             #We need the segmentation mask to create the boolean zero-out mask, TODO: Use seg-subreg mask in future for better details
-            seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+            if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary":
+                seg = processor._get_right_side_cutout(record, return_seg=self.opt.use_seg, max_shape=self.data_size)
+            else:
+                seg = processor._get_cutout(record, return_seg=self.opt.use_seg, max_shape=self.data_size) 
+            
             l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
             l_mask = seg == l_idx #create a mask for values belonging to lowest L
             sac_mask = seg == 26 #Sacrum is always denoted by value of 26
             lsac_mask = (l_mask + sac_mask) != 0
             lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
             img = img * lsac_mask
-        
-        flipped_img = np.flip(img, axis=2).copy()
 
-
-        l_idx = 25 if 25 in img else 24 if 24 in img else 23
-        s_idx = 26
-        sacrum_seg = np.where(img == s_idx)
-        last_l_seg = np.where(img == l_idx)
-        flipped_sacrum_seg = np.where(flipped_img == s_idx)
-        flipped_last_l_seg = np.where(flipped_img == l_idx)
-
-
-        dilated_sacrum_seg = self.dilate_image(sacrum_seg, s_idx, iterations=2)
-        dilated_last_l_seg = self.dilate_image(last_l_seg, l_idx, iterations=2)
-        dilated_img = dilated_sacrum_seg + dilated_last_l_seg
-        
-        flipped_dilated_sacrum_seg = self.dilate_image(flipped_sacrum_seg, s_idx, iterations=2)
-        flipped_dilated_last_l_seg = self.dilate_image(flipped_last_l_seg, l_idx, iterations=2)
-        flipped_dilated_img = flipped_dilated_sacrum_seg + flipped_dilated_last_l_seg
-
-
-        eroded_sacrum_seg = self.erosion_image(sacrum_seg, s_idx, iterations=2)
-        eroded_last_l_seg = self.erosion_image(last_l_seg, l_idx, iterations=2)
-        eroded_img = eroded_sacrum_seg + eroded_last_l_seg
-
-        flipped_eroded_sacrum_seg = self.erosion_image(flipped_sacrum_seg, s_idx, iterations=2)
-        flipped_eroded_last_l_seg = self.erosion_image(flipped_last_l_seg, l_idx, iterations=2)
-        flipped_eroded_img = flipped_eroded_sacrum_seg + flipped_eroded_last_l_seg
-
-
-        img = img[np.newaxis,np.newaxis, ...]
-        flipped_img = flipped_img[np.newaxis, np.newaxis, ...]
-        dilated_img = dilated_img[np.newaxis, np.newaxis, ...]
-        flipped_dilated_img = flipped_dilated_img[np.newaxis, np.newaxis, ...]
-        eroded_img = eroded_img[np.newaxis, np.newaxis, ...]
-        flipped_eroded_img = flipped_eroded_img[np.newaxis, np.newaxis, ...]
-
-        # Convert to tensor
-        img = img.astype(np.float32) 
-        flipped_img = flipped_img.astype(np.float32) 
-        dilated_img = dilated_img.astype(np.float32)
-        flipped_dilated_img = flipped_dilated_img.astype(np.float32)
-        eroded_img = eroded_img.astype(np.float32)
-        flipped_eroded_img = flipped_eroded_img.astype(np.float32)
-
-        img = torch.from_numpy(img)
-        flipped_img = torch.from_numpy(flipped_img)
-        dilated_img = torch.from_numpy(dilated_img)
-        flipped_dilated_img = torch.from_numpy(flipped_dilated_img)
-        eroded_img = torch.from_numpy(eroded_img)
-        flipped_eroded_img = torch.from_numpy(flipped_eroded_img)
-
-
-        # Convert to float
-        img = img.float()
-        flipped_img = flipped_img.float()
-        dilated_img = dilated_img.float()
-        flipped_dilated_img = flipped_dilated_img.float()
-        eroded_img = eroded_img.float()
-        flipped_eroded_img = flipped_eroded_img.float()
-
-
-        # Move to GPU
-        img = img.to(self.device)
-        flipped_img = flipped_img.to(self.device)
-        dilated_img = dilated_img.to(self.device)
-        flipped_dilated_img = flipped_dilated_img.to(self.device)
-        eroded_img = eroded_img.to(self.device)
-        flipped_eroded_img = flipped_eroded_img.to(self.device)
-
-
-        return img, flipped_img, dilated_img, flipped_dilated_img, eroded_img, flipped_eroded_img
+        model_inputs = self.get_model_inputs(img)
+        return model_inputs
     
 
     def get_actual_labels(self, record):
@@ -308,94 +330,117 @@ class Eval:
         return acutal_r, actual_flip_r
 
 
+    def process_output(self, model, img):
+        with torch.no_grad():
+            output = self.get_model_output(model, img)
+            output_probabilities = self.apply_softmax(output)
+            output_class, output_prob = self.get_max(output_probabilities)
+            return output_class, output_prob
+        
+    def create_results(self, record, castellvi_pred, pred_side, output_prob, pred_flip_side, flipped_output_prob, actual_side, actual_flip_side):
+        results = {
+            'subject' : record['subject'],
+            'version' : self.opt.version_no,
+            'actual' : record['castellvi'],
+            'pred' : castellvi_pred,
+            'actual_right_side' : actual_side,
+            'pred_right_side' : pred_side,
+            'pred_prob' : output_prob,
+            'actual_flip_right_side' : actual_flip_side,
+            'pred_flip_right_side' : pred_flip_side,
+            'pred_flip_prob' : flipped_output_prob
+        }
+        return results
+    
+
+    def update_results_for_seg(self, dilated_output_prob, eroded_output_prob, pred_dilated_side, pred_eroded_side, pred_flip_dilated_side, pred_flip_eroded_side, dilated_castellvi_pred, eroded_castellvi_pred, flipped_dilated_output_prob, flipped_eroded_output_prob):
+        return {
+            'dilated_pred' : dilated_castellvi_pred,
+            'eroded_pred' : eroded_castellvi_pred,
+            'dilated_pred_right_side' : pred_dilated_side,
+            'eroded_pred_right_side' : pred_eroded_side,
+            'pred_prob' : dilated_output_prob,
+            'dilated_pred_prob' : dilated_output_prob,
+            'eroded_pred_prob' : eroded_output_prob,
+            'pred_flip_right_side' : pred_flip_dilated_side,
+            'dilated_pred_flip_right_side' : pred_flip_dilated_side,
+            'eroded_pred_flip_right_side' : pred_flip_eroded_side,
+            'pred_flip_prob' : flipped_dilated_output_prob,
+            'dilated_pred_flip_prob' : flipped_dilated_output_prob,
+            'eroded_pred_flip_prob' : flipped_eroded_output_prob
+        }
+    
+
+    def convert_dict_to_dataframe(self, results):
+        # Convert dictionary to DataFrame
+        results_df = pd.DataFrame(results)
+        return results_df
+
+    def save_results(self, results_df, base_path):
+        results_file = base_path + '/results.csv'
+        if not os.path.isfile(results_file):
+            results_df.to_csv(results_file, index=False)
+        else: # else it exists so append without writing the header
+            results_df.to_csv(results_file, mode='a', header=False, index=False)
+
+
     def evaluate(self, path, base_path):
         model = self.load_model(path, self.opt)
         processor = self.get_processor()
         test_subjects = self.get_test_subjects()
         records = self.get_records(processor, test_subjects)
-
+        results_list = []
         for record in records:
-            # get input image
-            input_img, flipped_img, dilated_img, flipped_dilated_img, eroded_img, flipped_eroded_img  = self.process_input(processor, record)
             self.gt.append(record['castellvi'])
             actual_side, actual_flip_side = self.get_actual_labels(record)
+            
+            # get input image
+            model_inputs = self.process_input(processor, record)
+            input_img = model_inputs["original"]
+            flipped_img = model_inputs["flipped"]
+            output_class, output_prob = self.process_output(model, input_img)
+            flipped_output_class, flipped_output_prob = self.process_output(model, flipped_img)
+            castellvi_pred = self.get_label_map(map='final_class').get((output_class, flipped_output_class))
+            self.preds.append(castellvi_pred)
+            pred_side = self.get_label_map(map='pred_class').get((output_class))
+            pred_flip_side = self.get_label_map(map='pred_class').get((flipped_output_class))
+            results = self.create_results(record, 
+                                          castellvi_pred, 
+                                          pred_side, 
+                                          output_prob, 
+                                          pred_flip_side, 
+                                          flipped_output_prob, 
+                                          actual_side, 
+                                          actual_flip_side)
 
-            with torch.no_grad():
-                # get the output from the model
-                output = self.get_model_output(model, input_img)
-                flipped_output = self.get_model_output(model, flipped_img)
-                dilated_output = self.get_model_output(model, dilated_img)
-                flipped_dilated_output = self.get_model_output(model, flipped_dilated_img)
-                eroded_output = self.get_model_output(model, eroded_img)
-                flipped_eroded_output = self.get_model_output(model, flipped_eroded_img)
-
-
-                # apply softmax to get probabilities
-                output_probabilities = self.apply_softmax(output)
-                flipped_output_probabilities = self.apply_softmax(flipped_output)
-                dilated_output_probabilities = self.apply_softmax(dilated_output)
-                flipped_dilated_output_probabilities = self.apply_softmax(flipped_dilated_output)
-                eroded_output_probabilities = self.apply_softmax(eroded_output)
-                flipped_eroded_output_probabilities = self.apply_softmax(flipped_eroded_output)
-
-                
-                output_class, output_prob = self.get_max(output_probabilities)
-                flipped_output_class, flipped_output_prob = self.get_max(flipped_output_probabilities)
-                dilated_output_class, dilated_output_prob = self.get_max(dilated_output_probabilities)
-                flipped_dilated_output_class, flipped_dilated_output_prob = self.get_max(flipped_dilated_output_probabilities)
-                eroded_output_class, eroded_output_prob = self.get_max(eroded_output_probabilities)
-                flipped_eroded_output_class, flipped_eroded_output_prob = self.get_max(flipped_eroded_output_probabilities)
-
-
-                castellvi_pred = self.get_label_map(map='final_class').get((output_class, flipped_output_class))
+            if self.opt.seg_comparison:
+                dilated_img = model_inputs["dilation"]
+                eroded_img = model_inputs["erosion"]
+                flipped_dilated_img = model_inputs["flipped_dilation"]
+                flipped_eroded_img = model_inputs["flipped_erosion"]
+                dilated_output_class, dilated_output_prob = self.process_output(model, dilated_img)
+                flipped_dilated_output_class, flipped_dilated_output_prob = self.process_output(model, flipped_dilated_img)
+                eroded_output_class, eroded_output_prob = self.process_output(model, eroded_img)
+                flipped_eroded_output_class, flipped_eroded_output_prob = self.process_output(model, flipped_eroded_img)
                 dilated_castellvi_pred = self.get_label_map(map='final_class').get((dilated_output_class, flipped_dilated_output_class))
                 eroded_castellvi_pred = self.get_label_map(map='final_class').get((eroded_output_class, flipped_eroded_output_class))
-
-                self.preds.append(castellvi_pred)
                 self.dilated_preds.append(dilated_castellvi_pred)
                 self.eroded_preds.append(eroded_castellvi_pred)
-
-                pred_side = self.get_label_map(map='pred_class').get((output_class))
-                pred_flip_side = self.get_label_map(map='pred_class').get((flipped_output_class))
                 pred_dilated_side = self.get_label_map(map='pred_class').get((dilated_output_class))
                 pred_flip_dilated_side = self.get_label_map(map='pred_class').get((flipped_dilated_output_class))
                 pred_eroded_side = self.get_label_map(map='pred_class').get((eroded_output_class))
                 pred_flip_eroded_side = self.get_label_map(map='pred_class').get((flipped_eroded_output_class))
+                results.update(self.update_results_for_seg(dilated_output_prob, eroded_output_prob, 
+                                                           pred_dilated_side, pred_eroded_side, pred_flip_dilated_side, 
+                                                           pred_flip_eroded_side, dilated_castellvi_pred, eroded_castellvi_pred, 
+                                                           flipped_dilated_output_prob, flipped_eroded_output_prob))
+                
+            results_list.append(results)
 
 
-            results = {
-                'subject' : record['subject'],
-                'version' : self.opt.version_no,
-                'actual' : record['castellvi'],
-                'pred' : castellvi_pred,
-                'dilated_pred' : dilated_castellvi_pred,
-                'eroded_pred' : eroded_castellvi_pred,
-                'actual_right_side' : actual_side,
-                'pred_right_side' : pred_side,
-                'dilated_pred_right_side' : pred_dilated_side,
-                'eroded_pred_right_side' : pred_eroded_side,
-                'pred_prob' : output_prob,
-                'dilated_pred_prob' : dilated_output_prob,
-                'eroded_pred_prob' : eroded_output_prob,
-                'actual_flip_right_side' : actual_flip_side,
-                'pred_flip_right_side' : pred_flip_side,
-                'dilated_pred_flip_right_side' : pred_flip_dilated_side,
-                'eroded_pred_flip_right_side' : pred_flip_eroded_side,
-                'pred_flip_prob' : flipped_output_prob,
-                'dilated_pred_flip_prob' : flipped_dilated_output_prob,
-                'eroded_pred_flip_prob' : flipped_eroded_output_prob
-            }
+        results_df = self.convert_dict_to_dataframe(results_list)
+        self.save_results(results_df, base_path)
 
-            #print(results)
-            # Convert dictionary to DataFrame
-            # Initialize an empty DataFrame
-            results_df = pd.DataFrame.from_dict(results, orient='index').T
-            #print(results_df)
-            results_file = base_path + '/results.csv'
-            if not os.path.isfile(results_file):
-                results_df.to_csv(results_file, index=False)
-            else: # else it exists so append without writing the header
-                results_df.to_csv(results_file, mode='a', header=False, index=False)
         return self.gt, self.preds
 
 
@@ -413,48 +458,24 @@ def main(params, ckpt_path=None, base_path=None):
     ck = cohen_kappa_score(gt, preds)
     mcc = matthews_corrcoef(gt, preds)
 
-    cm_dilated = confusion_matrix(gt, evaluator.dilated_preds)
-    f1_dilated = f1_score(gt, evaluator.dilated_preds, average='weighted')
-    ck_dilated = cohen_kappa_score(gt, evaluator.dilated_preds)
-    mcc_dilated = matthews_corrcoef(gt, evaluator.dilated_preds)
-
-    cm_eroded = confusion_matrix(gt, evaluator.eroded_preds)
-    f1_eroded = f1_score(gt, evaluator.eroded_preds, average='weighted')
-    ck_eroded = cohen_kappa_score(gt, evaluator.eroded_preds)
-    mcc_eroded = matthews_corrcoef(gt, evaluator.eroded_preds)
-
     print('Confusion Matrix: \n', cm)
     print('F1 Score: ', f1)
     print('Cohen\'s Kappa: ', ck)
     print('Matthews Correlation Coefficient: ', mcc)
+    
 
-    # TODO : Save the statistics in a csv file for each version
     # check if the file exists
     metrics_file = base_path + '/metrics.csv'
     if not os.path.isfile(metrics_file):
         # Initialize an empty DataFrame
-        metrics_df = pd.DataFrame(columns=['version', 'confusion_matirx', 'dilated_confusion_matirx', 'eroded_confusion_matirx', 
-                                           'f1_score', 'dilated_f1_score', 'eroded_f1_score', 
-                                           'cohen_kappa', 'dilated_cohen_kappa', 'eroded_cohen_kappa',
-                                           'mcc', 'dilated_mcc', 'eroded_mcc'])
+        metrics_df = pd.DataFrame(columns=['version', 'f1_score','cohen_kappa', 'mcc'])
         
     else: # else it exists so append without writing the header
         metrics_df = pd.read_csv(metrics_file)
-    
-    # TODO : change confusion matrix to save as a string
-    confusion_matrix = np.array2string(cm, separator=', ')
-    dilated_confusion_matrix = np.array2string(cm_dilated, separator=', ')
-    eroded_confusion_matrix = np.array2string(cm_eroded, separator=', ')
 
-    # Append rows in DataFrame
-    metrics_df = metrics_df.append({'version': params.version_no, 'confusion_matirx': confusion_matrix, 'dilated_confusion_matirx': dilated_confusion_matrix, 'eroded_confusion_matirx': eroded_confusion_matrix,
-                                    'f1_score': f1, 'dilated_f1_score': f1_dilated, 'eroded_f1_score': f1_eroded,
-                                    'cohen_kappa': ck, 'dilated_cohen_kappa': ck_dilated, 'eroded_cohen_kappa': ck_eroded,
-                                    'mcc': mcc, 'dilated_mcc': mcc_dilated, 'eroded_mcc': mcc_eroded}, ignore_index=True)
-
-    # TODO : Save the statistics in a csv file for each version
+    # Append row to the metrics DataFrame
+    metrics_df = metrics_df.append({'version': params.version_no, 'f1_score': f1, 'cohen_kappa': ck, 'mcc': mcc}, ignore_index=True)
     metrics_df.to_csv(metrics_file, index=False)
-
 
 
 if __name__ == "__main__":
@@ -521,6 +542,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_zero_out', action='store_true')
     parser.add_argument('--gradual_freezing', action='store_true')
     parser.add_argument('--elastic_transform', action='store_true')
+    parser.add_argument('--seg_comparison', action='store_true')
     
     parser.add_argument('--version_no', type=int, default=0)
     parser.add_argument('--dataset', nargs='+', default=['verse', 'tri'])
@@ -528,5 +550,6 @@ if __name__ == "__main__":
     
     params = parser.parse_args()
     base_experiment = params.experiments + '/baseline_models/' + params.model
-    ckpt_path = base_experiment + '/best_models/version_' + str(params.version_no) 
+    ckpt_path = base_experiment + '/best_models/version_' + str(params.version_no)
+    print(ckpt_path)
     main(params=params, ckpt_path=ckpt_path, base_path=base_experiment)
