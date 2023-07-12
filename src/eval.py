@@ -478,7 +478,7 @@ if __name__ == "__main__":
                                                            str(os.path.join(env_settings.DATA, 'dataset-tri'))])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_v2.xlsx')))
+    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split.xlsx')))
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
@@ -501,6 +501,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_classes', type=int, default=3)
     parser.add_argument('--port', type=int, default=2023)
     parser.add_argument('--model_type', type=str, default='')
+    parser.add_argument('--dropout_prob', type=float, default=0.3)
 
 
     parser.add_argument('--rotate_range', type=int, default=10)
