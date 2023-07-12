@@ -103,7 +103,7 @@ class Eval:
         masterlist = masterlist[masterlist['Full_Id'].str.contains('|'.join(self.opt.dataset))]
         if self.opt.eval_type != 'all':
             # return the subjects if FullId contains any substring from dataset array 
-            masterlist = masterlist[masterlist['Split'].isin(['test', 'val'])]
+            masterlist = masterlist[masterlist['Split'].isin(['val'])]
         else:
             masterlist = masterlist[masterlist['Split'].isin(['test', 'val', 'train'])]
 
