@@ -103,7 +103,7 @@ class Eval:
         masterlist = masterlist[masterlist['Full_Id'].str.contains('|'.join(self.opt.dataset))]
         if self.opt.eval_type != 'all':
             # return the subjects if FullId contains any substring from dataset array 
-            masterlist = masterlist[masterlist['Split'].isin(['test', 'val'])]
+            masterlist = masterlist[masterlist['Split'].isin(['val'])]
         else:
             masterlist = masterlist[masterlist['Split'].isin(['test', 'val', 'train'])]
 
@@ -371,7 +371,7 @@ if __name__ == "__main__":
                                                            '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/data/dataset-tri'])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/Castellvi_list_v2.xlsx')
+    parser.add_argument('--master_list', default='/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/Castellvi_list_Final_Split_v2.xlsx')
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')

@@ -8,9 +8,5 @@ export PYTHONWARNINGS="ignore"
 
 
 
-python3 eval.py --use_seg --use_bin_seg --use_zero_out --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 5
-python3 eval.py --use_seg --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 9
-python3 eval.py --use_seg --use_bin_seg --use_zero_out --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 10
-python3 eval.py --use_seg --use_zero_out --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 11
-python3 eval.py --use_seg --use_zero_out --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 12
-python3 eval.py --use_seg --use_zero_out --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 13
+python3 eval.py --use_seg --use_bin_seg --use_zero_out --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 17
+python3 eval_V2.py --use_seg --use_bin_seg --use_zero_out --classification_type right_side --model densenet --num_classes 3 --weighted_sample --version_no 1

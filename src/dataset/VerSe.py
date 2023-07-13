@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 from utils._prepare_data import DataHandler
 from monai.transforms import Compose, CenterSpatialCrop, RandRotate, Rand3DElastic, RandAffine
 from scipy import ndimage
+import torch
 
 
 class VerSe(Dataset):
@@ -226,6 +227,7 @@ class VerSe(Dataset):
                                             translate_range=self.opt.translate_range,  # Translation range
                                             scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
                                             spatial_size=[128, 86, 136],
+                                            device=torch.device("cuda:0"),
                                         )
                                     ])
         else:

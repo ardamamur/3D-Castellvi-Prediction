@@ -15,7 +15,7 @@ python3 train.py \
         --weighted_sample \
         --n_epochs 70 \
         --batch_size 16 \
-        --learning_rate 0.00001 \
+        --learning_rate 0.001 \
         --classification_type right_side \
         --model densenet \
         --num_classes 3 \
