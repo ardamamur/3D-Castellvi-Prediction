@@ -148,6 +148,7 @@ class DenseNet(pl.LightningModule):
             loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.val_step_outputs)
             loss = torch.mean(loss_a)
             self.log("val_loss", loss, on_epoch=True)
+            print(f"Val Loss: {loss.item():.4f}")
             
             mcc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             cohen = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
@@ -226,7 +227,7 @@ class DenseNet(pl.LightningModule):
             raise Exception("Not Implemented")
         
         num_classes = self.num_classes
-        return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained, dropout_prob=self.opt.dropout_prob)
+        return network_func(data_channel=self.data_channel, num_classes=num_classes, pretrained=pretrained)
 
         
     def __str__(self):

@@ -135,6 +135,8 @@ class VerSe(Dataset):
             return self._get_binary_label(record)
         elif self.classification_type == "right_side":
             return self._get_castellvi_right_side_label(record)
+        elif self.classification_type == "both_side":
+            return self._get_castellvi_right_side_label(record)
         elif self.classification_type == "multi_class":
             return self._get_castellvi_multi_labels(record)
         elif self.classification_type == "right_side_binary":
