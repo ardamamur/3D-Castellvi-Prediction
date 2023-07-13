@@ -65,7 +65,7 @@ class Eval:
         return prediction_mapping
 
     def get_label_map(self, map: str = 'final_class'):
-        if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary":
+        if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary" or self.opt.classification_type == "both_side":
             if map == 'final_class':
                 prediction_mapping = self.get_final_class_prediction_mapping()
 
@@ -160,7 +160,7 @@ class Eval:
         return prediction
     
     def get_f1_score(self, y_true, y_pred):
-        f1 = f1_score(y_true, y_pred, average='weighted')
+        f1 = f1_score(y_true, y_pred, average='macro')
         return f1
     
     def get_confusion_matrix(self, y_true, y_pred):
@@ -446,15 +446,26 @@ class Eval:
 
 def main(params, ckpt_path=None, base_path=None):
     evaluator = Eval(params)
-    best_model= os.listdir(ckpt_path)[0]
+    best_models= os.listdir(ckpt_path)
+    # TODO : parse the file name to get the best model
+    # example : densenet-epoch=75-val_mcc=0.89.ckpt
+    best_val = 0
+    best_model = None
+    for model in best_models:
+        val_score = model.split('=')[-1].split('.')[0] + '.' + model.split('=')[-1].split('.')[1]
+        val_score = float(val_score)
+        if val_score > best_val:
+            best_val = val_score
+            best_model = model
     best_model_path = os.path.join(ckpt_path, best_model)
+    print('Best Model Path: ', best_model_path)
     
     # Run evaluation for each best model
     gt, preds = evaluator.evaluate(path=best_model_path, base_path=base_path)
     
     # Calculate Confusion Matrix, F1, Cohen's Kappa and Matthews Correlation Coefficient
     cm = confusion_matrix(gt, preds)
-    f1 = f1_score(gt, preds, average='weighted')
+    f1 = evaluator.get_f1_score(gt, preds)
     ck = cohen_kappa_score(gt, preds)
     mcc = matthews_corrcoef(gt, preds)
 
@@ -499,7 +510,7 @@ if __name__ == "__main__":
                                                            str(os.path.join(env_settings.DATA, 'dataset-tri'))])
     parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
     parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split.xlsx')))
+    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split_v2.xlsx')))
     parser.add_argument('--classification_type', default='right_side')
     parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
     parser.add_argument('--model', default='densenet')
