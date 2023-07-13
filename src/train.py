@@ -87,12 +87,22 @@ def main(params):
         logger = TensorBoardLogger(experiment, default_hp_metric=False)
         
         # TODO: Add early stopping
+        monitor = params.val_metric
+        if params.val_metric == "val_loss":
+            mode = 'min'
+            filename = params.model + '-{epoch:02d}-{val_loss:.2f}'
+        elif params.val_metric == "val_mcc":
+            filename = params.model + '-{epoch:02d}-{val_mcc:.2f}'
+            mode = 'max'
+        else:
+            raise Exception(f"Metric '{params.val_metric}' not implemented")
+
         checkpoint_callback = ModelCheckpoint(
-            monitor='val_mcc',
+            monitor=monitor,
             dirpath=f'{experiment}/best_models/version_{logger.version}',
-            filename=params.model + '-{epoch:02d}-{val_mcc:.2f}',
-            save_top_k=3,
-            mode='max',
+            filename=filename,
+            save_top_k=1,
+            mode=mode,
         )
 
         # Create trainer
@@ -102,7 +112,6 @@ def main(params):
                             devices=params.n_devices,
                             log_every_n_steps=min(32, params.batch_size),
                             callbacks=[checkpoint_callback],
-                            accumulate_grad_batches=params.accumulate_grad_batches,
                             logger=logger)
         # Start tensorboard
         try:
@@ -219,6 +228,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_classes', type=int, default=3)
     parser.add_argument('--port', type=int, default=2023)
     parser.add_argument('--model_type', type=str, default='')
+    parser.add_argument('--val_metric', type=str, default='val_mcc')
 
 
     parser.add_argument('--rotate_range', type=int, default=10)

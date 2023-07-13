@@ -13,7 +13,7 @@ python3 eval.py \
         --use_bin_seg \
         --use_zero_out \
         --weighted_sample \
-        --classification_type right_side \
+        --classification_type both_side \
         --model densenet \
         --num_classes 3 \
-        --version_no 1
+        --version_no 0
