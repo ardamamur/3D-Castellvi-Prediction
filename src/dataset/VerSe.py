@@ -61,11 +61,7 @@ class VerSe(Dataset):
         '''
 
         record = self.records[index] 
-
         img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
-
-
-
         ###Apply zeroing out and binarizing
         if self.use_seg:
             if self.use_zero_out:
@@ -104,7 +100,7 @@ class VerSe(Dataset):
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
         
-        print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
+        print('target:', record["subject"], 'flip:', record['flip'],  'label:', labels)
         return {"target": inputs, "class": labels}
 
 

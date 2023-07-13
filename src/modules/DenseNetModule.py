@@ -70,14 +70,14 @@ class DenseNet(pl.LightningModule):
         if self.training_step_outputs is not None:
 
             avg_loss = torch.stack([x['loss'] for x in self.training_step_outputs]).mean()  # Calculate average loss over the epoch
-            self.log("train_loss", avg_loss, on_epoch=True)  # Log the average loss
             loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.training_step_outputs)
-            matthews_acc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
-            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            mcc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            cohen = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
-            self.logger.experiment.add_scalar('train_matthews_acc', matthews_acc, self.current_epoch)
-            self.logger.experiment.add_scalar("train_cohen_acc", acc, self.current_epoch)
-            self.logger.experiment.add_scalar("train_f1score", f1score, self.current_epoch)
+            self.log('train_loss', avg_loss, on_epoch=True)
+            self.log('train_mcc', mcc, on_epoch=True)
+            self.log("train_cohen_kappa", cohen, on_epoch=True)
+            self.log("train_f1score", f1score, on_epoch=True)
             self.training_step_outputs = []  # Clear the outputs at the end of each epoch
 
 
@@ -120,8 +120,8 @@ class DenseNet(pl.LightningModule):
 
     def calc_pred_tensor(self, target, gt_cls, detach2cpu: bool = False) -> dict:
         logits = self.forward(target)
-        print(len(gt_cls))
-        print(gt_cls)
+        #print(len(gt_cls))
+        #print(gt_cls)
         assert (gt_cls >= 0).all() and (gt_cls < self.num_classes).all(), "Labels out of range"
         loss = self.loss_function(logits, gt_cls)
 
@@ -148,13 +148,24 @@ class DenseNet(pl.LightningModule):
             loss_a, predictions_a, pred_cls_a, gt_cls_a = self.cat_metrics(self.val_step_outputs)
             loss = torch.mean(loss_a)
             self.log("val_loss", loss, on_epoch=True)
+            print(f"Val Loss: {loss.item():.4f}")
             
-            matthews_acc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
-            acc = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            mcc = mF.matthews_corrcoef(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+            cohen = mF.cohen_kappa(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             f1score = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             f1_p_cls = mF.f1_score(preds=pred_cls_a, target=gt_cls_a, average="none", num_classes=self.num_classes, task='multiclass')
             prec = mF.precision(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
             confmat = mF.confusion_matrix(preds=pred_cls_a, target=gt_cls_a, num_classes=self.num_classes, task='multiclass')
+
+            # Log MCC and Cohen's Kappa for Model selection
+            self.log("val_mcc", mcc.item(), on_epoch=True)
+            self.log("val_cohen_kappa", cohen.item(), on_epoch=True)
+            self.log("val_f1score", f1score.item(), on_epoch=True)
+            self.log("val_prec", prec.item(), on_epoch=True)
+
+            # Log F1 score per class
+            for i in range(self.num_classes):
+                self.log(f"val_f1score_{i}", f1_p_cls[i], on_epoch=True)
             
             try:
                 import seaborn as sns
@@ -166,13 +177,9 @@ class DenseNet(pl.LightningModule):
             except Exception as e:
                 print("caught exception in confusion matrix", e)
 
-            # Log important validation values
-            self.logger.experiment.add_scalar('train_matthews_acc', matthews_acc, self.current_epoch)
-            self.logger.experiment.add_scalar('val_matthews_acc', matthews_acc, self.current_epoch)
-            self.logger.experiment.add_scalar("val_cohen_acc", acc, self.current_epoch)
-            self.logger.experiment.add_scalar("val_f1score", f1score, self.current_epoch)
-            self.logger.experiment.add_scalar("val_prec", prec, self.current_epoch)
-            self.logger.experiment.add_text("f1_p_cls", str(f1_p_cls.tolist()), self.current_epoch)
+            self.logger.experiment.add_text("val_f1_p_class", str(f1_p_cls.tolist()), self.current_epoch)
+
+
             self.val_step_outputs = []
 
 
