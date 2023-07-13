@@ -109,21 +109,19 @@ class VerSe(Dataset):
         #add channel dimension
         img = img[np.newaxis, ...]         
         #convert img from numpy array to torch tensor
-        img = torch.from_numpy(img)
+        #img = torch.from_numpy(img)
 
         # Get the label
         labels = self._get_label_based_on_conditions(record)
 
         inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
         
-        #print('tatget:', record["subject"], 'flip:', record['flip'],  'label:', labels)
-        
 
-        #cast input to float tensor and label to long tensor
-        inputs = inputs.float()
-        labels = torch.tensor(labels).long()
+        # #cast input to float tensor and label to long tensor
+        # inputs = inputs.float()
+        # labels = torch.tensor(labels).long()
 
-
+        #print('target:', record["subject"], 'flip:', record['flip'],  'label:', labels)
         return {"target": inputs, "class": labels}
 
 
