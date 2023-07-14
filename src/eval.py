@@ -1,495 +1,311 @@
 import os
-import sys
-import re
-import argparse
-import json
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from scipy import ndimage
-from sklearn.metrics import f1_score, confusion_matrix, ConfusionMatrixDisplay, matthews_corrcoef, cohen_kappa_score
-import torch
-from torch import nn
-from utils.environment_settings import env_settings
-
-# Custom module imports
-from utils._prepare_data import DataHandler
-from utils._get_model import *
+from dataset.VerSe import VerSe
+from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef, cohen_kappa_score, confusion_matrix
 from modules.DenseNetModule import DenseNet
-from modules.ResNetModule import ResNet
-from dataset.VerSe import *
+from utils._prepare_data import DataHandler
+from utils.environment_settings import env_settings
+from tqdm import tqdm
+import sys
+import torch
 
 class Eval:
-    def __init__(self, opt) -> None:
-        self.opt = opt
-        self.data_size = (96,78,78) if (opt.classification_type == "right_side" or opt.classification_type == "right_side_binary") else (128,86,136)
-        self.num_classes = opt.num_classes
-        self.softmax = nn.Softmax(dim=1)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.gt = []
-        self.preds = []
-        self.dilated_preds = []
-        self.eroded_preds = []
+    def __init__(self, params):
+        self.params = params
+        self.master_list = env_settings.MASTER_LIST
+        self.dataset = [os.path.join(env_settings.DATA, "dataset-verse19"), 
+                        os.path.join(env_settings.DATA, "dataset-verse20"), 
+                        os.path.join(env_settings.DATA, "dataset-tri")]
+        self.data_types = ['rawdata',"derivatives"]
+        self.image_types = ["ct", "subreg", "cortex"]
+        self.model_path = params.model_path
 
-    # Implementation of get_label_map function broken down into three functions.
-    def get_final_class_prediction_mapping(self):
-        prediction_mapping = {
-            ('1', '1'): '2b',
-            ('2', '2'): '3b',
-            ('0', '0'): '0',
-            ('0', '1'): '2a',
-            ('1', '0'): '2a',
-            ('0', '2'): '3a',
-            ('2', '0'): '3a',
-            ('1', '2'): '4',
-            ('2', '1'): '4',
-        }
-        return prediction_mapping
-
-    def get_side_class_prediction_mapping(self):
-        prediction_mapping = {
-            '0': '0',
-            '2a': '2',
-            '2b': '2',
-            '3a': '3',
-            '3b': '3'
-        }
-        return prediction_mapping
-
-    def get_output_class_prediction_mapping(self):
-        prediction_mapping = {
-            '2': '3',
-            '1': '2',
-            '0': '0'
-        }
-        return prediction_mapping
-
-    def get_label_map(self, map: str = 'final_class'):
-        if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary" or self.opt.classification_type == "both_side":
-            if map == 'final_class':
-                prediction_mapping = self.get_final_class_prediction_mapping()
-
-            elif map == 'actual_class':
-                prediction_mapping = self.get_side_class_prediction_mapping()
-
-            elif map == 'pred_class':
-                prediction_mapping = self.get_output_class_prediction_mapping()
-
-            return prediction_mapping
-        else:
-            raise NotImplementedError("Only right_side classification is supported")
-
-    # Implementation of load_model function broken down into two functions.
-    def initialize_model(self, params):
-        if params.model == 'densenet':
-            model = DenseNet(opt=params, num_classes=self.num_classes, data_size=self.data_size, data_channel=1)
-        elif params.model == 'resnet' or params.model == 'resnetc':
-            model = ResNet(opt=params, num_classes=self.num_classes)
-        else:
-            raise NotImplementedError("Model not recognized. Implement the model initialization.")
+    def load_model(self, model_path):
+        model = DenseNet.load_from_checkpoint(model_path)
         return model
-
-    def load_model(self, path, params):
-        model = self.initialize_model(params)
-        model.load_state_dict(torch.load(path)['state_dict'])
-        model.to(self.device)
-        model.eval()
-        return model
-
-    def get_test_subjects(self):
-        # extract the test subjects from masterlist by usıng the Split column and if Flip is 0
-        masterlist = pd.read_excel(self.opt.master_list, index_col=0)
-        #masterlist = masterlist.loc[masterlist['Split'] == 'test'] # extract test subjects
-        masterlist = masterlist[masterlist['Full_Id'].str.contains('|'.join(self.opt.dataset))]
-        if self.opt.eval_type != 'all':
-            # return the subjects if FullId contains any substring from dataset array 
-            print('eval type is not all')
-            masterlist = masterlist[masterlist['Split'].isin(['val'])]
-        else:
-            masterlist = masterlist[masterlist['Split'].isin(['test', 'val', 'train'])]
-
-        masterlist = masterlist.loc[masterlist['Flip'] == 0] # extract subjects with Flip = 0
-        test_subjects = masterlist["Full_Id"].tolist()
-        return test_subjects
     
     def get_processor(self):
-        processor = DataHandler(master_list=self.opt.master_list,
-                            dataset=self.opt.data_root,
-                            data_types=self.opt.data_types,
-                            image_types=self.opt.img_types
-                        )
+        processor = DataHandler(master_list=self.master_list, dataset=self.dataset, data_types=self.data_types, image_types=self.image_types)
         return processor
     
-    def get_records(self, processor, test_subjects):
-        test_records = []
-        verse_records = processor.verse_records
-        tri_records = processor.tri_records
-        records = verse_records + tri_records
-        for index in range(len(records)):
-            record = records[index]
-            # check if any element in test subhjects contains the subject in record
-            if any(record['subject'] in s for s in test_subjects):
-                # check for the flip value
-                if record['flip'] == 0:
-                    test_records.append(record)
+    def get_verse_dataset(self, processor, model):
+        verse_dataset = VerSe(model.opt, processor, processor.verse_records + processor.tri_records, training=False)
+        return verse_dataset
+    
+    def get_val_subjects(self, verse_dataset):
+        # For each record with dataset_split = val, get index of both flipped and non-flipped records
+        val_subjects = [record["subject"] for record in verse_dataset.records if (record["dataset_split"] == "val" and record["flip"] == 1)]
+        print('length of val dataset:', len(val_subjects))
+        return val_subjects
+
+    
+    def get_joined_subjects(self, verse_dataset, val_subjects):
+        val_subs_joined = {}
+        val_subs_idx = []
+        for subject in val_subjects:
+            val_subs_joined[subject] = {}
+
+        for index, record in enumerate(verse_dataset.records):
+            if record["subject"] in val_subjects:
+                val_subs_idx.append(index)
+                if record["flip"] == 1:
+                    val_subs_joined[record["subject"]]["flip"] = index
+                    val_subs_joined[record["subject"]]["castellvi"] = record["castellvi"]
+                    val_subs_joined[record["subject"]]["side"] = record["side"]
                 else:
-                    continue
-            else:
-                continue
-        print('lenght of the test dataset:' , len(test_records))
-        return test_records
-    
-
-    def apply_softmax(self, outputs):
-        # apply softmax to get probabilities
-        output_probabilities = self.softmax(outputs)
-        return output_probabilities
-    
-    def get_max(self, output_probabilities):
-        # get the max probability
-        max_prob, max_index = torch.max(output_probabilities, 1)
-        output_class = str(max_index.item())
-        output_prob = max_prob.item()
-        return output_class, output_prob
-    
-
-    def get_model_output(self, model, input):
-        # get the prediction from the mode
-        print('input shape:', input.shape)
-        prediction = model(input)
-        return prediction
-    
-    def get_f1_score(self, y_true, y_pred):
-        f1 = f1_score(y_true, y_pred, average='weighted')
-        return f1
-    
-    def get_confusion_matrix(self, y_true, y_pred):
-        cm = confusion_matrix(y_true, y_pred)
-        return cm
+                    val_subs_joined[record["subject"]]["non_flip"] = index
 
 
-    def get_results_df(self):
-        path = self.opt.results_df
-        if os.path.exists(path):
-            results_df = pd.read_csv(path, index_col=0)
-            return results_df
-        else:
-            # should be a pivot df where we group by subject and each subject has rows for different experiments
-            return None
+        return val_subs_joined
 
-    def dilate_image(self, img, v_index, iterations=2):
-        img = ndimage.binary_dilation(img, iterations=iterations)
-        img = img * v_index
-        return img
-    
-    def get_dilated_input(self, sacrum_seg, last_l_seg, s_idx, l_idx, iterations=2):
-        dilated_sacrum_seg = self.dilate_image(sacrum_seg, s_idx, iterations=iterations)
-        dilated_last_l_seg = self.dilate_image(last_l_seg, l_idx, iterations=iterations)
-        dilated_img = dilated_sacrum_seg + dilated_last_l_seg
-        return dilated_img
-    
-    def erosion_image(self, img, v_index, iterations=2):
-        img = ndimage.binary_erosion(img, iterations=iterations)
-        img = img * v_index
-        return img
-    
-    def get_eroded_input(self, sacrum_seg, last_l_seg, s_idx, l_idx, iterations=2):
-        eroded_sacrum_seg = self.erosion_image(sacrum_seg, s_idx, iterations=iterations)
-        eroded_last_l_seg = self.erosion_image(last_l_seg, l_idx, iterations=iterations)
-        eroded_img = eroded_sacrum_seg + eroded_last_l_seg
-        return eroded_img
-    
-    def convert_to_tensor(self, img):
-        img = img[np.newaxis,np.newaxis, ...]
-        img = img.astype(np.float32) 
-        img = torch.from_numpy(img)
-        img = img.float()
-        img = img.to(self.device)
-        return img
-    
-    def flip_image(self, img):
-        img = np.flip(img, axis=2)
-        return img
-    
 
-    def get_sacrum_segmentation(self, img):
-        s_idx = 26
-        sacrum_seg = np.where(img == s_idx)
-        return sacrum_seg, s_idx
-    
-    def get_last_lumbar_segmentation(self, img):
-        l_idx = 25 if 25 in img else 24 if 24 in img else 23
-        last_lumbar_seg = np.where(img == l_idx)
-        return last_lumbar_seg, l_idx
-    
-    def get_model_inputs(self, img):
-        """
-        input_types: list of strings
-                    ["dilation", "erosion", "original"]
-        """
-        model_inputs = {
-            "original": None,
-            "dilation": None,
-            "erosion": None,
-            "flipped": None,
-            "flipped_dilation": None,
-            "flipped_erosion": None
-        }
-        original_img = img.copy()
-        sacrum_seg, s_idx = self.get_sacrum_segmentation(original_img)
-        last_l_seg, l_idx = self.get_last_lumbar_segmentation(original_img)
-
-        flipped_img = self.flip_image(img.copy())
-        flipped_sacrum_seg, flipped_s_idx = self.get_sacrum_segmentation(flipped_img)
-        flipped_last_l_seg, flipped_l_idx = self.get_last_lumbar_segmentation(flipped_img)
-
-        original_img_tensor = self.convert_to_tensor(original_img)
-        flipped_img_tensor = self.convert_to_tensor(flipped_img)
-
-        model_inputs["original"] = original_img_tensor
-        model_inputs["flipped"] = flipped_img_tensor
-
-  
-        if self.opt.seg_comparison:
-            # Get dilated images
-            dilated_img = self.get_dilated_input(sacrum_seg, last_l_seg, s_idx, l_idx)
-            flipped_dilated_img = self.get_dilated_input(flipped_sacrum_seg, flipped_last_l_seg, flipped_s_idx, flipped_l_idx)
-            print(dilated_img.shape, flipped_dilated_img.shape)
-
-            # Get eroded images
-            eroded_img = self.get_eroded_input(sacrum_seg, last_l_seg, s_idx, l_idx)
-            flipped_eroded_img = self.get_eroded_input(flipped_sacrum_seg, flipped_last_l_seg, flipped_s_idx, flipped_l_idx)
-
-            model_inputs["dilation"] = self.convert_to_tensor(dilated_img)
-            model_inputs["erosion"] = self.convert_to_tensor(eroded_img)
-            model_inputs["flipped_dilation"] = self.convert_to_tensor(flipped_dilated_img)
-            model_inputs["flipped_erosion"] = self.convert_to_tensor(flipped_eroded_img)
-
-        return model_inputs
-
-    def process_input(self, processor, record):
-
-        if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary":
-            img = processor._get_right_side_cutout(record,return_seg=self.opt.use_seg, max_shape=self.data_size)
-        else:
-            img = processor._get_cutout(record,return_seg=self.opt.use_seg, max_shape=self.data_size)
+    def full_castellvi_to_lbl(self, record):
+        if record["castellvi"] in ("0", "1a", "1b"):
+            return 0
         
-        if self.opt.use_seg:
-            if self.opt.use_zero_out:
-                l_idx = 25 if 25 in img else 24 if 24 in img else 23
-                l_mask = img == l_idx #create a mask for values belonging to lowest L
-                sac_mask = img == 26 #Sacrum is always denoted by value of 26
-                lsac_mask = (l_mask + sac_mask) != 0
-                lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
-                img = img * lsac_mask
-
-            if self.opt.use_bin_seg:
-                bin_mask = img != 0
-                img = bin_mask.astype(float)
-                
-        elif self.opt.use_zero_out:
-            #We need the segmentation mask to create the boolean zero-out mask, TODO: Use seg-subreg mask in future for better details
-            if self.opt.classification_type == "right_side" or self.opt.classification_type == "right_side_binary":
-                seg = processor._get_right_side_cutout(record, return_seg=self.opt.use_seg, max_shape=self.data_size)
+        elif record["castellvi"] == "2a":
+            if record["side"] == "R":
+                return 1
             else:
-                seg = processor._get_cutout(record, return_seg=self.opt.use_seg, max_shape=self.data_size) 
-            
-            l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
-            l_mask = seg == l_idx #create a mask for values belonging to lowest L
-            sac_mask = seg == 26 #Sacrum is always denoted by value of 26
-            lsac_mask = (l_mask + sac_mask) != 0
-            lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
-            img = img * lsac_mask
-
-        model_inputs = self.get_model_inputs(img)
-        return model_inputs
-    
-
-    def get_actual_labels(self, record):
-        if record['side'] == 'R':
-            if record['castellvi'] == '4':
-                acutal_r = self.get_label_map(map='actual_class')['3a']
-                actual_flip_r = self.get_label_map(map='actual_class')['2a']
-            elif record['castellvi'] in ['3a', '2a']:
-                acutal_r = self.get_label_map(map='actual_class')[record['castellvi']]
-                actual_flip_r = self.get_label_map(map='actual_class')['0']
+                return 2
+        elif record["castellvi"] == "2b":
+            return 3
+        elif record["castellvi"] == "3a":
+            if record["side"] == "R":
+                return 4
             else:
-                acutal_r = self.get_label_map(map='actual_class')[record['castellvi']]
-                actual_flip_r = self.get_label_map(map='actual_class')[record['castellvi']]
+                return 5
+        elif record["castellvi"] == "3b":
+            return 6
+        elif record["castellvi"] == "4":
+            if record["side"] == "R":
+                return 7
+            else:
+                return 8
         else:
-            if record['castellvi'] == '4':
-                acutal_r = self.get_label_map(map='actual_class')['2a']
-                actual_flip_r = self.get_label_map(map='actual_class')['3a']
-            elif record['castellvi'] in ['3a', '2a']:
-                acutal_r = self.get_label_map(map='actual_class')['0']
-                actual_flip_r = self.get_label_map(map='actual_class')[record['castellvi']]
-            else:
-                acutal_r = self.get_label_map(map='actual_class')[record['castellvi']]
-                actual_flip_r = self.get_label_map(map='actual_class')[record['castellvi']]
+            raise ValueError(f"Invalid castellvi value {record['castellvi']}")
         
-        return acutal_r, actual_flip_r
-
-
-    def process_output(self, model, img):
-        with torch.no_grad():
-            output = self.get_model_output(model, img)
-            output_probabilities = self.apply_softmax(output)
-            output_class, output_prob = self.get_max(output_probabilities)
-            return output_class, output_prob
-        
-    def create_results(self, record, castellvi_pred, pred_side, output_prob, pred_flip_side, flipped_output_prob, actual_side, actual_flip_side):
-        results = {
-            'subject' : record['subject'],
-            'version' : self.opt.version_no,
-            'actual' : record['castellvi'],
-            'pred' : castellvi_pred,
-            'actual_right_side' : actual_side,
-            'pred_right_side' : pred_side,
-            'pred_prob' : output_prob,
-            'actual_flip_right_side' : actual_flip_side,
-            'pred_flip_right_side' : pred_flip_side,
-            'pred_flip_prob' : flipped_output_prob
-        }
-        return results
+    def get_no_side_castellvi_without_side(self, record):
+        if record["castellvi"] in ["0", "1a", "1b"]:
+            return 0
+        elif record["castellvi"] == "2a":
+            return 1
+        elif record["castellvi"] == "2b":
+            return 2
+        elif record["castellvi"] == "3a":
+            return 3
+        elif record["castellvi"] == "3b":
+            return 4
+        elif record["castellvi"] == "4":
+            return 5
     
-
-    def update_results_for_seg(self, dilated_output_prob, eroded_output_prob, pred_dilated_side, pred_eroded_side, pred_flip_dilated_side, pred_flip_eroded_side, dilated_castellvi_pred, eroded_castellvi_pred, flipped_dilated_output_prob, flipped_eroded_output_prob):
-        return {
-            'dilated_pred' : dilated_castellvi_pred,
-            'eroded_pred' : eroded_castellvi_pred,
-            'dilated_pred_right_side' : pred_dilated_side,
-            'eroded_pred_right_side' : pred_eroded_side,
-            'pred_prob' : dilated_output_prob,
-            'dilated_pred_prob' : dilated_output_prob,
-            'eroded_pred_prob' : eroded_output_prob,
-            'pred_flip_right_side' : pred_flip_dilated_side,
-            'dilated_pred_flip_right_side' : pred_flip_dilated_side,
-            'eroded_pred_flip_right_side' : pred_flip_eroded_side,
-            'pred_flip_prob' : flipped_dilated_output_prob,
-            'dilated_pred_flip_prob' : flipped_dilated_output_prob,
-            'eroded_pred_flip_prob' : flipped_eroded_output_prob
-        }
-    
-
-    def convert_dict_to_dataframe(self, results):
-        # Convert dictionary to DataFrame
-        results_df = pd.DataFrame(results)
-        return results_df
-
-    def save_results(self, results_df, base_path):
-        results_file = base_path + '/results.csv'
-        if not os.path.isfile(results_file):
-            results_df.to_csv(results_file, index=False)
-        else: # else it exists so append without writing the header
-            results_df.to_csv(results_file, mode='a', header=False, index=False)
+    def get_no_side_castellvi_from_sides(self, y_flip, y_non_flip):
+        if y_non_flip == 0 and y_flip == 0:
+            #this is a 0 case
+            return 0
+        elif (y_non_flip == 0 and y_flip == 1) or (y_non_flip == 1 and y_flip == 0):
+            #this is a 2a case
+            return 1
+        elif (y_non_flip == 1 and y_flip == 1):
+            #this is a 2b case
+            return 2
+        elif (y_non_flip == 0 and y_flip == 2) or (y_non_flip == 2 and y_flip == 0):
+            #this is a 3a case
+            return 3
+        elif y_non_flip == 2 and y_flip == 2:
+            #this is a 3b case
+            return 4
+        elif (y_non_flip == 1 and y_flip == 2) or (y_non_flip == 2 and y_flip == 1):
+            #this is a 4 case
+            return 5
 
 
-    def evaluate(self, path, base_path):
-        model = self.load_model(path, self.opt)
+    def get_castellvi_from_sides(self, y_flip, y_non_flip):
+        if y_non_flip == 0:
+            if y_flip == 0:
+                #This is a 0 casse
+                return 0
+            elif y_flip == 1:
+                #This is a left-sided 2a casse
+                return 2
+            elif y_flip == 2:
+                #This is a left-sided 3a casse
+                return 5
+        elif y_non_flip == 1:
+            if y_flip == 0:
+                #This is a right-sided 2a casse
+                return 1
+            elif y_flip == 1:
+                #This is a 2b casse
+                return 3
+            elif y_flip == 2:
+                #This is a right-sided 4 case
+                return 7
+        elif y_non_flip == 2:
+            if y_flip == 0:
+                #This is a right-sided 3a casse
+                return 4
+            elif y_flip == 1:
+                #This is a 3b casse
+                return 6
+            elif y_flip == 2:
+                #This is a left-sided 4 case
+                return 8
+
+
+    def evaluate(self):
+        model = self.load_model(self.model_path)
         processor = self.get_processor()
-        test_subjects = self.get_test_subjects()
-        records = self.get_records(processor, test_subjects)
-        results_list = []
-        for record in records:
-            self.gt.append(record['castellvi'])
-            actual_side, actual_flip_side = self.get_actual_labels(record)
-            
-            # get input image
-            model_inputs = self.process_input(processor, record)
-            input_img = model_inputs["original"]
-            flipped_img = model_inputs["flipped"]
-            output_class, output_prob = self.process_output(model, input_img)
-            flipped_output_class, flipped_output_prob = self.process_output(model, flipped_img)
-            castellvi_pred = self.get_label_map(map='final_class').get((output_class, flipped_output_class))
-            self.preds.append(castellvi_pred)
-            pred_side = self.get_label_map(map='pred_class').get((output_class))
-            pred_flip_side = self.get_label_map(map='pred_class').get((flipped_output_class))
-            results = self.create_results(record, 
-                                          castellvi_pred, 
-                                          pred_side, 
-                                          output_prob, 
-                                          pred_flip_side, 
-                                          flipped_output_prob, 
-                                          actual_side, 
-                                          actual_flip_side)
-
-            if self.opt.seg_comparison:
-                dilated_img = model_inputs["dilation"]
-                eroded_img = model_inputs["erosion"]
-                flipped_dilated_img = model_inputs["flipped_dilation"]
-                flipped_eroded_img = model_inputs["flipped_erosion"]
-                dilated_output_class, dilated_output_prob = self.process_output(model, dilated_img)
-                flipped_dilated_output_class, flipped_dilated_output_prob = self.process_output(model, flipped_dilated_img)
-                eroded_output_class, eroded_output_prob = self.process_output(model, eroded_img)
-                flipped_eroded_output_class, flipped_eroded_output_prob = self.process_output(model, flipped_eroded_img)
-                dilated_castellvi_pred = self.get_label_map(map='final_class').get((dilated_output_class, flipped_dilated_output_class))
-                eroded_castellvi_pred = self.get_label_map(map='final_class').get((eroded_output_class, flipped_eroded_output_class))
-                self.dilated_preds.append(dilated_castellvi_pred)
-                self.eroded_preds.append(eroded_castellvi_pred)
-                pred_dilated_side = self.get_label_map(map='pred_class').get((dilated_output_class))
-                pred_flip_dilated_side = self.get_label_map(map='pred_class').get((flipped_dilated_output_class))
-                pred_eroded_side = self.get_label_map(map='pred_class').get((eroded_output_class))
-                pred_flip_eroded_side = self.get_label_map(map='pred_class').get((flipped_eroded_output_class))
-                results.update(self.update_results_for_seg(dilated_output_prob, eroded_output_prob, 
-                                                           pred_dilated_side, pred_eroded_side, pred_flip_dilated_side, 
-                                                           pred_flip_eroded_side, dilated_castellvi_pred, eroded_castellvi_pred, 
-                                                           flipped_dilated_output_prob, flipped_eroded_output_prob))
-                
-            results_list.append(results)
+        verse_dataset = self.get_verse_dataset(processor, model)
+        val_subjects = self.get_val_subjects(verse_dataset)
+        val_subs_joined = self.get_joined_subjects(verse_dataset, val_subjects)
 
 
-        results_df = self.convert_dict_to_dataframe(results_list)
-        self.save_results(results_df, base_path)
-
-        return self.gt, self.preds
-
-
-def main(params, ckpt_path=None, base_path=None):
-    evaluator = Eval(params)
-    best_models= os.listdir(ckpt_path)
-    # TODO : parse the file name to get the best model
-    # example : densenet-epoch=75-val_mcc=0.89.ckpt
-    best_val = 0
-    best_model = None
-    for model in best_models:
-        val_score = model.split('=')[-1].split('.')[0] + '.' + model.split('=')[-1].split('.')[1]
-        val_score = float(val_score)
-        if val_score > best_val:
-            best_val = val_score
-            best_model = model
-    best_model_path = os.path.join(ckpt_path, best_model)
-    print('Best Model Path: ', best_model_path)
-    
-    # Run evaluation for each best model
-    gt, preds = evaluator.evaluate(path=best_model_path, base_path=base_path)
-    
-    # Calculate Confusion Matrix, F1, Cohen's Kappa and Matthews Correlation Coefficient
-    cm = confusion_matrix(gt, preds)
-    f1 = evaluator.get_f1_score(gt, preds)
-    ck = cohen_kappa_score(gt, preds)
-    mcc = matthews_corrcoef(gt, preds)
-
-    print('Confusion Matrix: \n', cm)
-    print('F1 Score: ', f1)
-    print('Cohen\'s Kappa: ', ck)
-    print('Matthews Correlation Coefficient: ', mcc)
-    
-
-    # check if the file exists
-    metrics_file = base_path + '/metrics.csv'
-    if not os.path.isfile(metrics_file):
-        # Initialize an empty DataFrame
-        metrics_df = pd.DataFrame(columns=['version', 'f1_score','cohen_kappa', 'mcc'])
         
-    else: # else it exists so append without writing the header
-        metrics_df = pd.read_csv(metrics_file)
+        sidewise_pred = []
+        sidewise_true = []
+        full_castellvi_pred = []
+        full_castellvi_true = []
+        no_side_castellvi_pred = []
+        no_side_castellvi_true = []
+        failed_subs = []
 
-    # Append row to the metrics DataFrame
-    metrics_df = metrics_df.append({'version': params.version_no, 'f1_score': f1, 'cohen_kappa': ck, 'mcc': mcc}, ignore_index=True)
-    metrics_df.to_csv(metrics_file, index=False)
+        results = []
+
+        model.to('cuda')
+        model.eval()
+        for val_sub in tqdm(val_subs_joined):
+            side_wise_pred = None
+            side_wise_flip_pred = None
+            side_wise_gt = None
+            side_wise_flip_gt = None
+
+            for flip in ["flip", "non_flip"]:
+                idx = val_subs_joined[val_sub][flip]
+                sidewise_true.append(verse_dataset[idx]["class"].to("cuda"))
+                x = verse_dataset[idx]["target"]
+                #convert x to cuda tensor
+                x = x.unsqueeze(0)
+                out = model(x.cuda())
+                out = out.squeeze(0)
+                sidewise_pred.append(out.argmax().item())
+
+                if flip == "flip":
+                    side_wise_flip_pred = out.argmax().item()
+                    side_wise_gt = verse_dataset[idx]["class"].cpu()
+                else:
+                    side_wise_pred = out.argmax().item()
+                    side_wise_flip_gt = verse_dataset[idx]["class"].cpu()
+
+                if out.argmax().item() != verse_dataset[idx]["class"].cpu():
+                    failed_subs.append({"subject": val_sub, "side": "L" if flip == "flip" else "R", "y_true": verse_dataset[idx]["class"].cpu(), "y_pred": out.argmax().item(), "castellvi": val_subs_joined[val_sub]["castellvi"]})
+                if flip == "flip":
+                    y_pred_flip = out.argmax().item()
+                else:
+                    y_pred_non_flip = out.argmax().item()
+
+            # Combine y_pred_flip and y_pred_non_flip to final Castellvi prediction
+            full_castellvi_pred.append(self.get_castellvi_from_sides(y_pred_flip, y_pred_non_flip))
+            full_castellvi_true.append(self.full_castellvi_to_lbl(val_subs_joined[val_sub]))
+
+            # Add Side-Agnostic Castellvi Label
+            no_side_castellvi_pred.append(self.get_no_side_castellvi_from_sides(y_pred_flip, y_pred_non_flip))
+            no_side_castellvi_true.append(self.get_no_side_castellvi_without_side(val_subs_joined[val_sub]))
 
 
-if __name__ == "__main__":
+            pred  = self.get_no_side_castellvi_from_sides(y_pred_flip, y_pred_non_flip)
+            gt = self.get_no_side_castellvi_without_side(val_subs_joined[val_sub])
+
+            
+            no_side_map = {
+                0 : "0",
+                1 : "2a",
+                2 : "2b",
+                3 : "3a",
+                4 : "3b",
+                5 : "4"
+            }
+
+            side_wise_map = {
+                0 : "0",
+                1 : "2",
+                2 : "3",
+            }
+
+
+            subject_result_dict = {
+                "subject": val_sub,
+                "experiment_no": self.params.version, 
+                'gt': no_side_map[gt],
+                'pred': no_side_map[pred],
+                'side_wise_gt': side_wise_map[side_wise_gt.cpu().item()],
+                'side_wise_pred': side_wise_map[side_wise_pred],
+                'side_wise_flip_gt': side_wise_map[side_wise_flip_gt.cpu().item()],
+                'side_wise_flip_pred': side_wise_map[side_wise_flip_pred],
+            }
+
+            results.append(subject_result_dict)
+
+
+        import pandas as pd
+        # create dataframe from results array first check if results.csv exists if it is append to it
+        if os.path.exists("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv"):
+            df = pd.read_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
+            df = df.append(pd.DataFrame(results))
+            df.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
+        else:
+            df = pd.DataFrame(results)
+            df.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
+
+
+        sidewise_true = [y.cpu() for y in sidewise_true]
+
+        cm = confusion_matrix(sidewise_true, sidewise_pred)
+        print(cm)
+        # convert confusion matrix to list
+        cm = cm.tolist()
+        print(cm)
+
+
+        side_wise_accuracy = accuracy_score(sidewise_true, sidewise_pred)
+        side_wise_f1 = f1_score(sidewise_true, sidewise_pred, average="weighted")
+        side_wise_mcc = matthews_corrcoef(sidewise_true, sidewise_pred)
+        side_wise_kappa = cohen_kappa_score(sidewise_true, sidewise_pred)
+
+
+        accuracy = accuracy_score(no_side_castellvi_true, no_side_castellvi_pred)
+        f1 = f1_score(no_side_castellvi_true, no_side_castellvi_pred, average="weighted")
+        mcc = matthews_corrcoef(no_side_castellvi_true, no_side_castellvi_pred)
+        kappa = cohen_kappa_score(no_side_castellvi_true, no_side_castellvi_pred)
+
+
+        metrics = {
+            'experiment_no': self.params.version,
+            "side_wise_accuracy": side_wise_accuracy,
+            "side_wise_f1": side_wise_f1,
+            "side_wise_mcc": side_wise_mcc,
+            "side_wise_kappa": side_wise_kappa,
+            'side_wise_cm': cm,
+            "accuracy": accuracy,
+            "f1": f1,
+            "mcc": mcc,
+            "kappa": kappa,
+
+        }
+
+        # create dataframe from results array first check if metrics.csv exists if it is append to it
+        if os.path.exists("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv"):
+            df_metrics = pd.read_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
+            df_metrics = df_metrics.append(pd.DataFrame([metrics]))
+            df_metrics.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
+
+        else:
+            df_metrics = pd.DataFrame([metrics])
+            df_metrics.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
+
+
+
+
+if __name__ == '__main__':
 
     if env_settings.CUDA_VISIBLE_DEVICES is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(env_settings.CUDA_VISIBLE_DEVICES)
@@ -502,65 +318,16 @@ if __name__ == "__main__":
     else:
         print('Running on CPU')
 
-    parser = argparse.ArgumentParser(description='Evaluation settings')
 
-    parser = argparse.ArgumentParser(description='Evaluation settings')
-    parser.add_argument('--data_root', nargs='+', default=[str(os.path.join(env_settings.DATA, 'dataset-verse19')),
-                                                           str(os.path.join(env_settings.DATA, 'dataset-verse20')),
-                                                           str(os.path.join(env_settings.DATA, 'dataset-tri'))])
-    parser.add_argument('--data_types', nargs='+', default=['rawdata', 'derivatives'])
-    parser.add_argument('--img_types', nargs='+', default=['ct', 'subreg', 'cortex'])
-    parser.add_argument('--master_list', default= str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split_v2.xlsx')))
-    parser.add_argument('--classification_type', default='right_side')
-    parser.add_argument('--castellvi_classes', nargs='+', default=['1a', '1b', '2a', '2b', '3a', '3b', '4', '0'])
-    parser.add_argument('--model', default='densenet')
-    parser.add_argument('--phase', default='train')
-    parser.add_argument('--scheduler', default='ReduceLROnPlateau')
-    parser.add_argument('--optimizer', default='AdamW')
-    parser.add_argument('--learning_rate', type=float, default=0.0001)
-    parser.add_argument('--weight_decay', type=float, default=0.0001)
-    parser.add_argument('--total_iterations', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
-    parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--save_intervals', type=int, default=10)
-    parser.add_argument('--n_epochs', type=int, default=100)
-    parser.add_argument('--resume_path', default='')
-    parser.add_argument('--experiments', default=env_settings.EXPERIMENTS)
-    parser.add_argument('--gpu_id', default='0')
-    parser.add_argument('--n_devices', type=int, default=1)
-    parser.add_argument('--manual_seed', type=int, default=1)
-    parser.add_argument('--num_classes', type=int, default=3)
-    parser.add_argument('--port', type=int, default=2023)
-    parser.add_argument('--model_type', type=str, default='')
-    parser.add_argument('--dropout_prob', type=float, default=0.3)
-
-
-    parser.add_argument('--rotate_range', type=int, default=10)
-    parser.add_argument('--shear_range', type=float, default=0.2)
-    parser.add_argument('--translate_range', type=float, default=0.15)
-    parser.add_argument('--scale_range', nargs='+', default=[0.9, 1.1])
-    parser.add_argument('--aug_prob', type=float, default=0.5)
-
-
-    parser.add_argument('--use_seg', action='store_true')
-    parser.add_argument('--no_cuda', action='store_true')
-    parser.add_argument('--weighted_sample', action='store_true')
-    parser.add_argument('--weighted_loss', action='store_true')
-    parser.add_argument('--flip_all', action='store_true')
-    parser.add_argument('--cross_validation', action='store_true')
-    parser.add_argument('--use_bin_seg', action='store_true')
-    parser.add_argument('--use_zero_out', action='store_true')
-    parser.add_argument('--gradual_freezing', action='store_true')
-    parser.add_argument('--elastic_transform', action='store_true')
-    parser.add_argument('--seg_comparison', action='store_true')
-    
-    parser.add_argument('--version_no', type=int, default=0)
-    parser.add_argument('--dataset', nargs='+', default=['verse', 'tri'])
-    parser.add_argument('--eval_type', type=str, default='test')
-    
+    import argparse
+    parser = argparse.ArgumentParser(description='Training settings')
+    parser.add_argument('--model_path', default='')
+    parser.add_argument('--version', type=int, default=0)
     params = parser.parse_args()
-    base_experiment = params.experiments + '/baseline_models/' + params.model
-    ckpt_path = base_experiment + '/best_models/version_' + str(params.version_no)
-    print(ckpt_path)
-    main(params=params, ckpt_path=ckpt_path, base_path=base_experiment)
+
+    evaluator = Eval(params)
+    evaluator.evaluate()
+
+
+
+    
