@@ -33,12 +33,12 @@ class VerSe(Dataset):
         self.use_zero_out = opt.use_zero_out
         self.training = training
         self.classification_type = opt.classification_type 
-        self.pad_size = (96,78,78) if (self.classification_type == "right_side" or self.classification_type == "right_side_binary") else (128,86,136)
+        self.max_shape = (96,78,78) if (self.classification_type == "right_side" or self.classification_type == "right_side_binary") else (128,86,136)
         self.transformations = self.get_transformations()
-        self.test_transformations = self.get_test_transformations()
         self.records = records
         self.use_bin_seg = opt.use_bin_seg
         self.use_zero_out = opt.use_zero_out
+        self.use_seg_and_raw = opt.use_seg_and_raw
 
 
     def __len__(self):
@@ -63,22 +63,48 @@ class VerSe(Dataset):
 
         record = self.records[index] 
 
+        # Get the input
+        if self.use_seg_and_raw:
+            ct = self._get_input(record, use_seg=False)
+            seg = self._get_input(record, use_seg=True)
+            img = torch.cat((ct, seg), dim=0)
+
+        elif self.use_seg:
+            img = self._get_input(record, use_seg=True)
+
+        else:
+            img = self._get_input(record, use_seg=False)
+
+        # Get the label
+        labels = self._get_label_based_on_conditions(record)
+
+        inputs = self.transformations(img) if self.training else img # Only apply transformations if training
+
+        #cast input to float tensor and label to float tensor
+        labels = torch.tensor(labels).long()
+
+        #print('target:', record["subject"], 'flip:', record['flip'],  'label:', labels)
+        return {"target": inputs, "class": labels}
+    
+    def _get_input(self, record, use_seg):
+
         if self.classification_type == "right_side" or self.classification_type == "right_side_binary":
-            img = self.processor._get_right_side_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size)
+            img = self.processor._get_right_side_cutout(record, return_seg=use_seg, max_shape=self.max_shape)
         
         else:
-            img = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
-
+            img = self.processor._get_cutout(record, return_seg=use_seg, max_shape=self.max_shape) 
 
 
         ###Apply zeroing out and binarizing
         if self.use_seg:
             if self.use_zero_out:
+                #Removes all values except for the lowest L and sacrum (in particular: remove L3, L4 and L5 if they are not the lowest L)
                 l_idx = 25 if 25 in img else 24 if 24 in img else 23
                 l_mask = img == l_idx #create a mask for values belonging to lowest L
                 sac_mask = img == 26 #Sacrum is always denoted by value of 26
                 lsac_mask = (l_mask + sac_mask) != 0
-                lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
+                #Dilate mask to be consistent in non-zero values with CT scans if using both at the same time
+                lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=5)
                 img = img * lsac_mask
 
             if self.use_bin_seg:
@@ -87,16 +113,17 @@ class VerSe(Dataset):
             
 
         elif self.use_zero_out:
-            #We need the segmentation mask to create the boolean zero-out mask, TODO: Use seg-subreg mask in future for better details
+            #We need the segmentation mask to create the boolean zero-out mask
             if self.classification_type == "right_side" or self.classification_type == "right_side_binary":
-                seg = self.processor._get_right_side_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size)
+                seg = self.processor._get_right_side_cutout(record, return_seg=True, max_shape=self.max_shape)
             else:
-                seg = self.processor._get_cutout(record, return_seg=self.use_seg, max_shape=self.pad_size) 
+                seg = self.processor._get_cutout(record, return_seg=True, max_shape=self.max_shape) 
             l_idx = 25 if 25 in seg else 24 if 24 in seg else 23
             l_mask = seg == l_idx #create a mask for values belonging to lowest L
             sac_mask = seg == 26 #Sacrum is always denoted by value of 26
             lsac_mask = (l_mask + sac_mask) != 0
-            lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=2)
+            #Seg masks are not perfect, so we dilate them by a few pixels
+            lsac_mask = ndimage.binary_dilation(lsac_mask, iterations=5)
             img = img * lsac_mask
 
         
@@ -109,20 +136,9 @@ class VerSe(Dataset):
         #add channel dimension
         img = img[np.newaxis, ...]         
         # convert img from numpy array to torch tensor
-        img = torch.from_numpy(img)
+        img = torch.from_numpy(img).float()
 
-        # Get the label
-        labels = self._get_label_based_on_conditions(record)
-
-        inputs = self.transformations(img) if self.training else self.test_transformations(img) # Only apply transformations if training
-        
-
-        #cast input to float tensor and label to long tensor
-        inputs = inputs.float()
-        labels = torch.tensor(labels).long()
-
-        #print('target:', record["subject"], 'flip:', record['flip'],  'label:', labels)
-        return {"target": inputs, "class": labels}
+        return img
 
 
     def _get_label_based_on_conditions(self, record):
@@ -220,7 +236,6 @@ class VerSe(Dataset):
 
 
     def get_transformations(self):
-        # TODO do that like hyper parameeter optimization
         # randmom translation and rotation
         # random scaling to some degree
 
@@ -250,22 +265,21 @@ class VerSe(Dataset):
         if self.opt.elastic_transform:
 
             transformations = Compose([
-                                        CenterSpatialCrop(roi_size=self.pad_size),
                                         Rand3DElastic(
-                                            prob=0.5,
-                                            sigma_range=(5, 8),
-                                            magnitude_range=(100, 200),
+                                            prob=self.opt.aug_prob,
+                                            sigma_range=(float(self.opt.sigma_range[0]), float(self.opt.sigma_range[1])),
+                                            magnitude_range=(float(self.opt.magnitude_range[0]), float(self.opt.magnitude_range[1])),
                                             rotate_range=np.deg2rad(self.opt.rotate_range),  # Rotation range
                                             shear_range=self.opt.shear_range,  # Shear range
                                             translate_range=self.opt.translate_range,  # Translation range
                                             scale_range=(float(self.opt.scale_range[0]), float(self.opt.scale_range[1])), # Scaling range
-                                            spatial_size=self.pad_size,
+                                            spatial_size=self.max_shape,
                                             device=torch.device("cuda:0"),
                                         )
                                     ])
         else:
 
-            transformations = Compose([CenterSpatialCrop(roi_size=self.pad_size)],
+            transformations = Compose([CenterSpatialCrop(roi_size=self.max_shape)],
                                       RandAffine(translate_range=self.opt.translate_range, 
                                                 rotate_range=np.deg2rad(self.opt.rotate_range),
                                                 scale_range=(float(self.opt.scale_range[0]),float(self.opt.scale_range[1])),
@@ -274,12 +288,3 @@ class VerSe(Dataset):
             
 
         return transformations
-    
-
-    def get_test_transformations(self):
-        transformations = Compose([CenterSpatialCrop(roi_size=self.pad_size)])
-        return transformations
-    
-
-        
-

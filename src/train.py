@@ -32,7 +32,7 @@ def run_cross_validation(params, current_fold):
     model = ModelClass(opt=params,
                        num_classes=params.num_classes,
                        data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
-                       data_channel=1
+                       data_channel=2 if params.use_seg_and_raw else 1
                        ).cuda()
     
     # TODO: Update experiment name
@@ -79,7 +79,7 @@ def main(params):
         model = ModelClass(opt=params,
                         num_classes=params.num_classes,
                         data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
-                        data_channel=1
+                        data_channel=2 if params.use_seg_and_raw else 1
                         ).cuda()
 
         # TODO: Update experiment name
@@ -236,18 +236,21 @@ if __name__ == '__main__':
     parser.add_argument('--translate_range', type=float, default=0.15)
     parser.add_argument('--scale_range', nargs='+', default=[0.9, 1.1])
     parser.add_argument('--aug_prob', type=float, default=0.5)
+    parser.add_argument('--elastic_transform', action='store_true')
+    parser.add_argument('--sigma_range', nargs='+', default=[5, 8])
+    parser.add_argument('--magnitude_range', nargs='+', default=[100, 200])
 
 
     parser.add_argument('--use_seg', action='store_true')
+    parser.add_argument('--use_bin_seg', action='store_true')
+    parser.add_argument('--use_seg_and_raw', action='store_true')
     parser.add_argument('--no_cuda', action='store_true')
     parser.add_argument('--weighted_sample', action='store_true')
     parser.add_argument('--weighted_loss', action='store_true')
     parser.add_argument('--flip_all', action='store_true')
     parser.add_argument('--cross_validation', action='store_true')
-    parser.add_argument('--use_bin_seg', action='store_true')
     parser.add_argument('--use_zero_out', action='store_true')
     parser.add_argument('--gradual_freezing', action='store_true')
-    parser.add_argument('--elastic_transform', action='store_true')
     parser.add_argument('--dropout_prob', type=float, default=0.0)
     params = parser.parse_args()
 
