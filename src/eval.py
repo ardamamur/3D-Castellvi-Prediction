@@ -160,7 +160,7 @@ class Eval:
         return prediction
     
     def get_f1_score(self, y_true, y_pred):
-        f1 = f1_score(y_true, y_pred, average='macro')
+        f1 = f1_score(y_true, y_pred, average='weighted')
         return f1
     
     def get_confusion_matrix(self, y_true, y_pred):
