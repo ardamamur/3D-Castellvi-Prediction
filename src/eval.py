@@ -171,6 +171,27 @@ class Eval:
 
         results = []
 
+        classification_type = model.opt.classification_type
+        zero_out = model.opt.use_zero_out
+        dropout = model.opt.dropout_prob
+
+        if model.opt.elastic_transform:
+            augmentation = "Rand3DElastic"
+        else:   
+            augmentation = "RandAffine"
+
+
+        if model.opt.use_seg:
+            data_type = "seg"
+        if model.opt.use_bin_seg:
+            data_type = "bin_seg"
+        if model.opt.use_seg_and_raw:
+            data_type = "seg_and_ct"
+
+        if not model.opt.use_seg_and_raw and not model.opt.use_bin_seg and not model.opt.use_seg:
+            data_type = "ct"
+
+
         model.to('cuda')
         model.eval()
         for val_sub in tqdm(val_subs_joined):
@@ -251,9 +272,11 @@ class Eval:
         if os.path.exists("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv"):
             df = pd.read_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
             df = df.append(pd.DataFrame(results))
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
             df.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
         else:
             df = pd.DataFrame(results)
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
             df.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
 
 
@@ -280,6 +303,11 @@ class Eval:
 
         metrics = {
             'experiment_no': self.params.version,
+            "cutout_type": classification_type,
+            "data_type": data_type,
+            "zero_out": zero_out,
+            "augmentation" : augmentation,
+            "dropout_prob": dropout,
             "side_wise_accuracy": side_wise_accuracy,
             "side_wise_f1": side_wise_f1,
             "side_wise_mcc": side_wise_mcc,
@@ -296,10 +324,12 @@ class Eval:
         if os.path.exists("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv"):
             df_metrics = pd.read_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
             df_metrics = df_metrics.append(pd.DataFrame([metrics]))
+            df_metrics = df_metrics.loc[:, ~df_metrics.columns.str.contains('^Unnamed')]
             df_metrics.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
 
         else:
             df_metrics = pd.DataFrame([metrics])
+            df_metrics = df_metrics.loc[:, ~df_metrics.columns.str.contains('^Unnamed')]
             df_metrics.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
 
 
