@@ -13,3 +13,4 @@ env_settings.DATA = '/data1/practical-sose23/castellvi/3D-Castellvi-Prediction/d
 env_settings.EXPERIMENTS = '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/'
 env_settings.CUDA_VISIBLE_DEVICES = 3
 env_settings.BIDS_PATH = '/data1/practical-sose23/castellvi/castellvi_prediction/bids'
+env_settings.MASTER_LIST = '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/Castellvi_list_Final_Split_v2.xlsx'

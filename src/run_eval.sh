@@ -7,13 +7,5 @@ export PYTHONPATH=$PYTHONPATH:/data1/practical-sose23/castellvi/castellvi_predic
 
 
 python3 eval.py \
-        --eval_type test \
-        --flip_all \
-        --use_seg \
-        --use_bin_seg \
-        --use_zero_out \
-        --weighted_sample \
-        --classification_type right_side \
-        --model densenet \
-        --num_classes 3 \
-        --version_no 1
+        --model_path /data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/best_models/version_0/densenet-epoch=20-val_mcc=0.88.ckpt \
+        --version 0 \
