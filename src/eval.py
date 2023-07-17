@@ -172,6 +172,11 @@ class Eval:
         results = []
 
         classification_type = model.opt.classification_type
+        if classification_type == 'right_side_binary':
+            isBinary = True
+        else:
+            isBinary = False
+
         zero_out = model.opt.use_zero_out
         dropout = model.opt.dropout_prob
 
@@ -294,7 +299,11 @@ class Eval:
         side_wise_mcc = matthews_corrcoef(sidewise_true, sidewise_pred)
         side_wise_kappa = cohen_kappa_score(sidewise_true, sidewise_pred)
 
-
+        
+        if isBinary:
+            no_side_castellvi_true = [x if x == 0 else 1 for x in no_side_castellvi_true]
+            no_side_castellvi_pred = [x if x == 0 else 1 for x in no_side_castellvi_pred]
+            
         accuracy = accuracy_score(no_side_castellvi_true, no_side_castellvi_pred)
         f1 = f1_score(no_side_castellvi_true, no_side_castellvi_pred, average="weighted")
         mcc = matthews_corrcoef(no_side_castellvi_true, no_side_castellvi_pred)
