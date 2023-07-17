@@ -30,21 +30,32 @@ def run_cross_validation(params, current_fold):
         raise Exception(f"Model '{params.model}' not implemented")
     # Instantiate model
     model = ModelClass(opt=params,
-                       num_classes=params.num_classes,
-                       data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
-                       data_channel=2 if params.use_seg_and_raw else 1
-                       ).cuda()
+                    num_classes=params.num_classes,
+                    data_size=(96,78,78) if (params.classification_type == "right_side" or params.classification_type == "right_side_binary") else (128,86,136),
+                    data_channel=2 if params.use_seg_and_raw else 1
+                    ).cuda()
     
     # TODO: Update experiment name
     experiment = params.experiments + '/baseline_models/'  + params.model
     logger = TensorBoardLogger(experiment, default_hp_metric=False)
+    
     # TODO: Add early stopping
+    monitor = params.val_metric
+    if params.val_metric == "val_loss":
+        mode = 'min'
+        filename = params.model + '-{epoch:02d}-{val_loss:.2f}'
+    elif params.val_metric == "val_mcc":
+        filename = params.model + '-{epoch:02d}-{val_mcc:.2f}'
+        mode = 'max'
+    else:
+        raise Exception(f"Metric '{params.val_metric}' not implemented")
+
     checkpoint_callback = ModelCheckpoint(
-        monitor='val_mcc',
+        monitor=monitor,
         dirpath=f'{experiment}/best_models/version_{logger.version}',
-        filename=params.model + '-{epoch:02d}-{val_mcc:.2f}' + '-' + str(current_fold),
-        save_top_k = 3,
-        mode='max',
+        filename=filename,
+        save_top_k=1,
+        mode=mode,
     )
 
     # Create trainer
@@ -135,7 +146,7 @@ def main(params):
         val_losses = []
 
         
-        num_folds = 5
+        num_folds = 4
         fold_models = []
         
         for k in range(num_folds):
@@ -158,8 +169,8 @@ def main(params):
             train_result = trainer.validate(model, datamodule=verse_data_module, verbose=False)
             val_result = trainer.validate(model, datamodule=verse_data_module, verbose=False)
 
-            train_loss = train_result[0]['val_loss']
-            val_loss = val_result[0]['val_loss']
+            train_loss = train_result[0][params.val_metric]
+            val_loss = val_result[0][params.val_metric]
             
             # Append the trained model and evaluation results to the list
             fold_models.append((model, train_loss, val_loss))
@@ -172,8 +183,8 @@ def main(params):
         avg_val_loss = sum(val_losses) / num_folds
 
 
-        print(f"Average Train Loss: {avg_train_loss:.4f}")
-        print(f"Average Validation Loss: {avg_val_loss:.4f}")
+        print(f"average train {params.val_metric} : {avg_train_loss:.4f}")
+        print(f"average validation {params.val_metric}: {avg_val_loss:.4f}")
 
 
 def start_tensorboard(port, tracking_address: str):

@@ -239,6 +239,8 @@ class Eval:
 
 
             pred  = self.get_no_side_castellvi_from_sides(y_pred_flip, y_pred_non_flip)
+
+
             gt = self.get_no_side_castellvi_without_side(val_subs_joined[val_sub])
 
             
@@ -258,15 +260,58 @@ class Eval:
             }
 
 
+            if isBinary:
+                if no_side_map[gt] != "0":
+                    gt = "1"
+                else:
+                    gt = "0"
+                if no_side_map[pred] != "0":
+                    pred = "1"
+                else:
+                    pred = "0"
+            else:
+                gt = no_side_map[gt]
+                pred = no_side_map[pred]
+
+
+            if isBinary:
+                if side_wise_map[side_wise_gt.cpu().item()] != "0":
+                    side_wise_gt = "1"
+                else:
+                    side_wise_gt = "0"
+                if side_wise_map[side_wise_pred] != "0":
+                    side_wise_pred = "1"
+                else:
+                    side_wise_pred = "0"
+            else:
+                side_wise_gt = side_wise_map[side_wise_gt.cpu().item()]
+                side_wise_pred = side_wise_map[side_wise_pred]
+
+
+            if isBinary:
+                if side_wise_map[side_wise_flip_gt.cpu().item()] != "0":
+                    side_wise_flip_gt = "1"
+                else:
+                    side_wise_flip_gt = "0"
+                if side_wise_map[side_wise_flip_pred] != "0":
+                    side_wise_flip_pred = "1"
+                else:
+                    side_wise_flip_pred = "0"
+            else:
+                side_wise_flip_gt = side_wise_map[side_wise_flip_gt.cpu().item()]
+                side_wise_flip_pred = side_wise_map[side_wise_flip_pred]
+
+
+
             subject_result_dict = {
                 "subject": val_sub,
                 "experiment_no": self.params.version, 
-                'gt': no_side_map[gt],
-                'pred': no_side_map[pred],
-                'side_wise_gt': side_wise_map[side_wise_gt.cpu().item()],
-                'side_wise_pred': side_wise_map[side_wise_pred],
-                'side_wise_flip_gt': side_wise_map[side_wise_flip_gt.cpu().item()],
-                'side_wise_flip_pred': side_wise_map[side_wise_flip_pred],
+                'gt': gt,
+                'pred': pred,
+                'side_wise_gt': side_wise_gt,
+                'side_wise_pred': side_wise_pred,
+                'side_wise_flip_gt': side_wise_flip_gt,
+                'side_wise_flip_pred': side_wise_flip_pred,
             }
 
             results.append(subject_result_dict)
