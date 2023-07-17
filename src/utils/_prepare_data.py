@@ -487,7 +487,7 @@ def main():
     image_types = ["ct", "subreg"]
     master_list = str(os.path.join(env_settings.ROOT, 'src/dataset/Castellvi_list_Final_Split.xlsx'))
     processor = DataHandler(master_list=master_list ,dataset=dataset, data_types=data_types, image_types=image_types)
-    print(processor._get_right_side_max_shape(ROI_max_shape=(128, 86, 136)))
+    processor._prepare_cutouts(max_shape=(128, 86, 136), n_jobs = 8, skip_existing = True)
     
 if __name__ == "__main__":
      main()
