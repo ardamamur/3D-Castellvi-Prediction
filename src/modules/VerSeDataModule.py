@@ -83,8 +83,8 @@ class VerSeDataModule(pl.LightningDataModule):
                 val_dataset = VerSe(self.opt, self.processor, val_records, training=False)
                 
                 # Don't forget to change path
-                train_file_name = '/u/home/ank/3D-Castellvi-Prediction/src/dataset/' + "fold" + str(count) + "_train" 
-                val_file_name = '/u/home/ank/3D-Castellvi-Prediction/src/dataset/' + "fold" + str(count) + "_val"
+                train_file_name = '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/' + "fold" + str(count) + "_train" 
+                val_file_name = '/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/src/dataset/' + "fold" + str(count) + "_val"
 
                 with open(train_file_name, 'w') as fp:
                     for item in train_records_subject_name:
