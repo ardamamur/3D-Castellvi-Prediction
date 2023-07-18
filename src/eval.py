@@ -33,7 +33,7 @@ class Eval:
     
     def get_val_subjects(self, verse_dataset):
         # For each record with dataset_split = val, get index of both flipped and non-flipped records
-        val_subjects = [record["subject"] for record in verse_dataset.records if (record["dataset_split"] == "val" and record["flip"] == 1)]
+        val_subjects = [record["subject"] for record in verse_dataset.records if (record["dataset_split"] == self.params.split and record["flip"] == 1)]
         print('length of val dataset:', len(val_subjects))
         return val_subjects
 
@@ -217,10 +217,10 @@ class Eval:
 
                 if flip == "flip":
                     side_wise_flip_pred = out.argmax().item()
-                    side_wise_gt = verse_dataset[idx]["class"].cpu()
+                    side_wise_flip_gt = verse_dataset[idx]["class"].cpu()
                 else:
                     side_wise_pred = out.argmax().item()
-                    side_wise_flip_gt = verse_dataset[idx]["class"].cpu()
+                    side_wise_gt = verse_dataset[idx]["class"].cpu()
 
                 if out.argmax().item() != verse_dataset[idx]["class"].cpu():
                     failed_subs.append({"subject": val_sub, "side": "L" if flip == "flip" else "R", "y_true": verse_dataset[idx]["class"].cpu(), "y_pred": out.argmax().item(), "castellvi": val_subs_joined[val_sub]["castellvi"]})
@@ -319,15 +319,16 @@ class Eval:
 
         import pandas as pd
         # create dataframe from results array first check if results.csv exists if it is append to it
-        if os.path.exists("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv"):
-            df = pd.read_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
+        results_file  = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results_" + self.params.split + ".csv"
+        if os.path.exists(results_file):
+            df = pd.read_csv(results_file)
             df = df.append(pd.DataFrame(results))
             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-            df.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
+            df.to_csv(results_file)
         else:
             df = pd.DataFrame(results)
             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-            df.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/results.csv")
+            df.to_csv(results_file)
 
 
         sidewise_true = [y.cpu() for y in sidewise_true]
@@ -375,16 +376,17 @@ class Eval:
         }
 
         # create dataframe from results array first check if metrics.csv exists if it is append to it
-        if os.path.exists("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv"):
-            df_metrics = pd.read_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
+        metrics_file  = "/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics_" + self.params.split + ".csv"
+        if os.path.exists(metrics_file):
+            df_metrics = pd.read_csv(metrics_file)
             df_metrics = df_metrics.append(pd.DataFrame([metrics]))
             df_metrics = df_metrics.loc[:, ~df_metrics.columns.str.contains('^Unnamed')]
-            df_metrics.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
+            df_metrics.to_csv(metrics_file)
 
         else:
             df_metrics = pd.DataFrame([metrics])
             df_metrics = df_metrics.loc[:, ~df_metrics.columns.str.contains('^Unnamed')]
-            df_metrics.to_csv("/data1/practical-sose23/castellvi/team_repo/3D-Castellvi-Prediction/experiments/baseline_models/densenet/metrics.csv")
+            df_metrics.to_csv(metrics_file)
 
 
 
@@ -407,6 +409,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training settings')
     parser.add_argument('--model_path', default='')
     parser.add_argument('--version', type=int, default=0)
+    parser.add_argument('--split', default='val')
     params = parser.parse_args()
 
     evaluator = Eval(params)
