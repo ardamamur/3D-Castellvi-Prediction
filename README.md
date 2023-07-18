@@ -163,6 +163,7 @@ You can evaluate your model with the following command
 ```
 python3 eval.py \
         --model_path <path_to_your_model_checkpoint>
+        --split test <dataset_split> \
         --version <experiment_number> \
 
 ```
