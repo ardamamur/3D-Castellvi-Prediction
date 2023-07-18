@@ -14,7 +14,6 @@
 
 ---
 
-
 ## 📝 Table of Contents
 
 - [About](#about)
@@ -23,19 +22,21 @@
 - [TODOs](#todo)
 - [Authors](#authors)
 
-## 🧐 About <a name = "about"></a>
+## 🧐 About `<a name = "about"></a>`
 
 The VerSe dataset consists of full-body CT scans enriched with aberrant cases. Anomalies in the lumbosacral region (a rather small part of the whole scan) can be rated via the Castellvi system (see https://radiopaedia.org/articles/castellvi-classification-of-lumbosacral-transitional-vertebrae). Although relatively easy to manually detect, it would still take a lot of time to rate huge datasets by hand. With a given expert grading of the data, the goal is to automate this process and predict the castellvi anomalies with a solid uncertainty estimation.
 
-
-## 🏁 Getting Started <a name = "getting_started"></a>
+## 🏁 Getting Started `<a name = "getting_started"></a>`
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+
+This project is built using python 3.10, other python versions are not tested.
+
 ### Prerequisites
 
 What things you need to install the software and how to install them.
 
-```
+```bash
 ~/3D-Castellvi-Prediction$ pip3 install -r requirements.txt
 ```
 
@@ -43,8 +44,9 @@ What things you need to install the software and how to install them.
 
 A step by step series of examples that tell you how to get a development env running.
 
-First create an experiments folder in working directory. 
-```
+First create an experiments folder in working directory.
+
+```bash
 ~/3D-Castellvi-Prediction$ mkdir experiments
 ~/3D-Castellvi-Prediction/experiments$ mkdir baseline_models
 ~/3D-Castellvi-Prediction/experiments/baseline_models$ mkdir densenet
@@ -53,21 +55,31 @@ First create an experiments folder in working directory.
 
 ```
 
-Update settings based on your local environment by using the following file. 
+Update environment settings by editing the following file: 
+
 ```
 ~/3D-Castellvi-Prediction/src/utils/environment_settings.py
 ```
 
+Move (or symlink) your dataset(s) in BIDS format into the directory specified in the environment_settings.py file.
+
+To prepare the cutouts and significantly cut down on training time, change your directory to src and run
+
+```
+python3 utils/_prepare_data.py
+```
 
 Install BIDS toolbox
+
 * https://bids-standard.github.io/bids-starter-kit/index.html
 
-After installed the BIDS, add it to your system path. You can run following command for it. 
+Either install BIDS into your Python environment or add it to your PYTHONPATH using
+
 ```
 export PYTHONPATH=$PYTHONPATH:<path_to_bids>/bids
 ```
 
-## Running the training <a name = "tests"></a>
+## Running the training `<a name = "tests"></a>`
 
 ```
 Training settings
@@ -117,7 +129,7 @@ Training settings
   --dropout_prob        Dropout probability
 ```
 
-* You can run the following command based on your settings or you can update the bash script (run_experiments.sh) to run multiple experiments at the same time. 
+* You can run the following command based on your settings or you can update the bash script (run_experiments.sh) to run multiple experiments at the same time.
 
 ```
 
@@ -144,19 +156,21 @@ python3 train.py \
         --dropout_prob 0.2
 ```
 
+## Running the evaluation `<a name = "tests"></a>`
 
-## Running the evaluation <a name = "tests"></a>
-You can evaluate your model with the following command 
+You can evaluate your model with the following command
+
 ```
 python3 eval.py \
         --model_path <path_to_your_model_checkpoint>
         --version <experiment_number> \
 
 ```
-Results will be saved in a csv file with the following experiment no. 
 
+Results will be saved in a csv file with the following experiment no.
 
 # Authors
-* [Melisa Ankut](https://github.com/melisaankut) 
+
+* [Melisa Ankut](https://github.com/melisaankut)
 * [Arda Mamur](https://github.com/ardamamur)
 * [Daniel Regenbrecht](https://github.com/doppelplusungut)
