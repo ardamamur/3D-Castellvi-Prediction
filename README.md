@@ -22,11 +22,11 @@
 - [TODOs](#todo)
 - [Authors](#authors)
 
-## 🧐 About `<a name = "about"></a>`
+## 🧐 About
 
 The VerSe dataset consists of full-body CT scans enriched with aberrant cases. Anomalies in the lumbosacral region (a rather small part of the whole scan) can be rated via the Castellvi system (see https://radiopaedia.org/articles/castellvi-classification-of-lumbosacral-transitional-vertebrae). Although relatively easy to manually detect, it would still take a lot of time to rate huge datasets by hand. With a given expert grading of the data, the goal is to automate this process and predict the castellvi anomalies with a solid uncertainty estimation.
 
-## 🏁 Getting Started `<a name = "getting_started"></a>`
+## 🏁 Getting Started
 
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
@@ -79,7 +79,7 @@ Either install BIDS into your Python environment or add it to your PYTHONPATH us
 export PYTHONPATH=$PYTHONPATH:<path_to_bids>/bids
 ```
 
-## Running the training `<a name = "tests"></a>`
+## Running the training
 
 ```
 Training settings
@@ -156,7 +156,7 @@ python3 train.py \
         --dropout_prob 0.2
 ```
 
-## Running the evaluation `<a name = "tests"></a>`
+## Running the evaluation
 
 You can evaluate your model with the following command
 
